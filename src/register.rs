@@ -1,3 +1,5 @@
+/// An integer type which can apply operations as specified by the ISA
+/// No panic shall occur from any method
 pub trait Integer {
     fn add(self, other: Self) -> Self;
     fn sub(self, other: Self) -> Self;
@@ -47,11 +49,19 @@ macro_rules! impl_integer {
 }
 impl_integer! { u32, i32, u64, i64, u128, i128, usize, isize }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum RegisterWidth {
+    Bits32,
+    Bits64,
+    Bits128
+}
+
 /// Byte order independent interpretations for a register
 pub trait Xlen {
     type Signed: Integer;
     type Unsigned: Integer;
     type Bytes;
+    const WIDTH: RegisterWidth;
 
     /// Interpret the register as a signed value
     fn signed(self) -> Self::Signed;
@@ -145,6 +155,10 @@ pub trait Register: Xlen + Sized {
     fn sign_extended_word(word: [u8; 4]) -> Self;
     /// Create a register with the lower portion set to the word and the rest set to zeroes
     fn zero_extended_word(word: [u8; 4]) -> Self;
+    /// Create a register with the lower portion set to the double and the rest set to the msb of the double
+    fn sign_extended_double(double: [u8; 8]) -> Self;
+    /// Create a register with the lower portion set to the double and the rest set to zeroes
+    fn zero_extended_double(double: [u8; 8]) -> Self;
 
     /// Get the lowest byte
     fn byte(self) -> u8;
@@ -152,6 +166,8 @@ pub trait Register: Xlen + Sized {
     fn half(self) -> [u8; 2];
     /// Get the lowest word
     fn word(self) -> [u8; 4];
+    /// Get the lowest double
+    fn double(self) -> [u8; 8];
 }
 
 /// A 32-bit value with byte-order and sign independent actions
@@ -161,6 +177,7 @@ impl Xlen for Register32 {
     type Signed = i32;
     type Unsigned = u32;
     type Bytes = [u8; 4];
+    const WIDTH: RegisterWidth = RegisterWidth::Bits32;
     fn signed(self) -> i32 {
         i32::from_le_bytes(self.0)
     }
@@ -204,6 +221,14 @@ impl Register for Register32 {
     fn zero_extended_word(word: [u8; 4]) -> Self {
         Self(word)
     }
+    #[inline(always)]
+    fn sign_extended_double(_: [u8; 8]) -> Self {
+        panic!("Cannot create a 32 bit register from a 64 bit value")
+    }
+    #[inline(always)]
+    fn zero_extended_double(_: [u8; 8]) -> Self {
+        panic!("Cannot create a 32 bit register from a 64 bit value")
+    }
 
     #[inline(always)]
     fn byte(self) -> u8 { self.0[0] }
@@ -211,6 +236,8 @@ impl Register for Register32 {
     fn half(self) -> [u8; 2] { [self.0[0], self.0[1]] }
     #[inline(always)]
     fn word(self) -> [u8; 4] { self.0 }
+    #[inline(always)]
+    fn double(self) -> [u8; 8] { panic!("Cannot get a 64 bit value from a 32 bit register") }
 }
 impl Default for Register32 {
     fn default() -> Self {

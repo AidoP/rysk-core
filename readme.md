@@ -32,27 +32,45 @@ Then in your project,
 # Goals
 Current Goals
 - [ ] Compatability with all platforms `std` supports
-- [ ] Support for all base extensions
+- [ ] Support for RV32IMA and RV64IMA
 - [x] Dependency-free
 
 Future Goals
 - [ ] Performance
+- [ ] Support for all base extensions
+- [ ] Support for the Privileged ISA
+- [ ] Debugging tools
 
 # Compliance
 
-| Extension | Support |
-| :-------- | :-----: |
-| RV32I     | Partial |
-| RV32E     | None    |
-| RV64I     | None    |
-| *Zifencei* | None    |
-| *Zicsr*   | None    |
-| M         | None    |
-| A         | None    |
-| F         | None    |
-| D         | None    |
-| Q         | None    |
-| C         | None    |
-| G         | Partial |
-| LBJTPV    | N/A     |
-| *Zam*, *Ztso* | N/A |
+> Note: This list does not account for errors and/or bugs in the implementation. Perfect compliance is not guaranteed
+> 
+> If an instruction does not behave as specified please leave an issue
+
+| Extension     | Support |
+| :-----------: | :-----: |
+| RV32I         | Partial |
+| RV32E         | None^1  |
+| RV64I         | Full    |
+| RV128I        | None    |
+| *Zifencei*    | None    |
+| *Zicsr*       | None    |
+| M             | None    |
+| A             | None    |
+| F             | None    |
+| D             | None    |
+| Q             | None    |
+| C             | None    |
+| G             | Partial |
+| LBJTPV        | N/A     |
+| *Zam*         | N/A     |
+| *Ztso*        | Always  |
+
+> Support for the embedded extension is low priority. Const-generics will make implementing this feature much cleaner and as such supporting RV32E is not planned until const-generics land in stable Rust.
+
+### Privilege Levels
+| Level      | Support |
+| :--------: | :-----: |
+| Machine    | Partial |
+| Supervisor | None    |
+| User       | None    |

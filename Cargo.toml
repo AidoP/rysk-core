@@ -4,4 +4,20 @@ version = "0.0.1"
 authors = ["AidoP <aidop@me.com>"]
 edition = "2018"
 
+[features]
+default = []
+
+ext-m = []
+
+ext-f = []
+ext-d = []
+ext-q = []
+
+ext-a = []
+
+ext-c = []
+
+# RV32E may disable other features
+rv32e = []
+
 [dependencies]

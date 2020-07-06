@@ -1,4 +1,4 @@
-use crate::register::Register;
+use crate::register::{Register,Register32,RegisterWidth};
 use crate::{variant,Variant};
 
 /// A single RISCV core
@@ -55,10 +55,22 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
                 self.set(destination, self.get(source1).add_unsigned(self.get(source2)));
                 Ok(self.step())
             },
+            // ADDW
+            (0b0111011, 0b000, 0b0000000) => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                self.set(destination, R::sign_extended_word(Register32(self.get(source1).word()).add_unsigned(Register32(self.get(source2).word())).word()));
+                Ok(self.step())
+            },
             // SUB
             (0b0110011, 0b000, 0b0100000) => {
                 let variant::R { destination, source1, source2 } = Variant::decode(instruction);
                 self.set(destination, self.get(source1).sub_unsigned(self.get(source2)));
+                Ok(self.step())
+            },
+            // SUBW
+            (0b0111011, 0b000, 0b0100000) => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                self.set(destination, R::sign_extended_word(Register32(self.get(source1).word()).sub_unsigned(Register32(self.get(source2).word())).word()));
                 Ok(self.step())
             },
             // SLT
@@ -77,6 +89,12 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             (0b0010011, 0b000, _) => {
                 let variant::I { destination, source, immediate } = Variant::decode(instruction);
                 self.set(destination, self.get(source).add_signed(immediate));
+                Ok(self.step())
+            },
+            // ADDIW
+            (0b0011011, 0b000, _) => {
+                let variant::I { destination, source, immediate } = Variant::decode(instruction);
+                self.set(destination, R::sign_extended_word(Register32(self.get(source).word()).add_signed(immediate).word()));
                 Ok(self.step())
             },
             // SLTI
@@ -135,10 +153,22 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
                 self.set(destination, self.get(source1).shl(self.get(source2)));
                 Ok(self.step())
             },
+            // SLLW
+            (0b0111011, 0b001, 0b0000000) if R::WIDTH != RegisterWidth::Bits32 => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                self.set(destination, R::sign_extended_word(Register32(self.get(source1).word()).shl(Register32(self.get(source2).word())).word()));
+                Ok(self.step())
+            },
             // SRL
             (0b0110011, 0b101, 0b0000000) => {
                 let variant::R { destination, source1, source2 } = Variant::decode(instruction);
                 self.set(destination, self.get(source1).shr(self.get(source2)));
+                Ok(self.step())
+            },
+            // SRLW
+            (0b0111011, 0b101, 0b0000000) if R::WIDTH != RegisterWidth::Bits32 => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                self.set(destination, R::sign_extended_word(Register32(self.get(source1).word()).shr(Register32(self.get(source2).word())).word()));
                 Ok(self.step())
             },
             // SRA
@@ -147,23 +177,59 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
                 self.set(destination, self.get(source1).sha(self.get(source2)));
                 Ok(self.step())
             },
-            // SLLI
-            (0b0010011, 0b001, 0b0000000) => {
-                let variant::I { destination, source, immediate } = Variant::decode(instruction);
-                self.set(destination, self.get(source).shl(immediate));
+            // SRAW
+            (0b0111011, 0b101, 0b0100000) if R::WIDTH != RegisterWidth::Bits32 => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                self.set(destination, R::sign_extended_word(Register32(self.get(source1).word()).sha(Register32(self.get(source2).word())).word()));
                 Ok(self.step())
+            },
+            // SLLI
+            (0b0010011, 0b001, _) => {
+                let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
+                self.set(destination, self.get(source).shl(immediate.and(R::zero_extended_byte(0x0E))));
+                Ok(self.step())
+            },
+            // SLLIW
+            (0b0011011, 0b001, _) if R::WIDTH != RegisterWidth::Bits32 => {
+                let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
+                if immediate.byte() & 0x20 != 0 {
+                    Err(DecodeError::ShiftWordReservedBit)
+                } else {
+                    self.set(destination, R::sign_extended_word(Register32(self.get(source).word()).shl(Register32(immediate.word()).and(Register32::zero_extended_byte(0x0E))).word()));
+                    Ok(self.step())
+                }
             },
             // SRLI
-            (0b0010011, 0b101, 0b0000000) => {
-                let variant::I { destination, source, immediate } = Variant::decode(instruction);
-                self.set(destination, self.get(source).shr(immediate));
+            (0b0010011, 0b101, _) if instruction[3] & 0x40 == 0 => {
+                let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
+                self.set(destination, self.get(source).shr(immediate.and(R::zero_extended_byte(0x0E))));
                 Ok(self.step())
             },
+            // SRLIW
+            (0b0011011, 0b101, _) if instruction[3] & 0x40 == 0 && R::WIDTH != RegisterWidth::Bits32 => {
+                let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
+                if immediate.byte() & 0x20 != 0 {
+                    Err(DecodeError::ShiftWordReservedBit)
+                } else {
+                    self.set(destination, R::sign_extended_word(Register32(self.get(source).word()).shr(Register32(immediate.word()).and(Register32::zero_extended_byte(0x0E))).word()));
+                    Ok(self.step())
+                }
+            },
             // SRAI
-            (0b0010011, 0b101, 0b0100000) => {
-                let variant::I { destination, source, immediate } = Variant::decode(instruction);
-                self.set(destination, self.get(source).sha(immediate));
+            (0b0010011, 0b101, _) if instruction[3] & 0x40 != 0 => {
+                let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
+                self.set(destination, self.get(source).sha(immediate.and(R::zero_extended_byte(0x0E))));
                 Ok(self.step())
+            },
+            // SRAIW
+            (0b0011011, 0b101, _) if instruction[3] & 0x40 != 0 && R::WIDTH != RegisterWidth::Bits32 => {
+                let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
+                if immediate.byte() & 0x20 != 0 {
+                    Err(DecodeError::ShiftWordReservedBit)
+                } else {
+                    self.set(destination, R::sign_extended_word(Register32(self.get(source).word()).sha(Register32(immediate.word()).and(Register32::zero_extended_byte(0x0E))).word()));
+                    Ok(self.step())
+                }
             },
 
             // LUI
@@ -214,6 +280,34 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
                     mmu.get(address.append(1)),
                     mmu.get(address.append(2)),
                     mmu.get(address.append(3))
+                ]));
+                Ok(self.step())
+            },
+            // LWU
+            (0b0000011, 0b110, _) if R::WIDTH != RegisterWidth::Bits32 => {
+                let variant::I { destination, source, immediate } = Variant::decode(instruction);
+                let address = self.get(source).add_signed(immediate);
+                self.set(destination, R::zero_extended_word([
+                    mmu.get(address.unsigned()),
+                    mmu.get(address.append(1)),
+                    mmu.get(address.append(2)),
+                    mmu.get(address.append(3))
+                ]));
+                Ok(self.step())
+            },
+            // LD
+            (0b0000011, 0b011, _) => {
+                let variant::I { destination, source, immediate } = Variant::decode(instruction);
+                let address = self.get(source).add_signed(immediate);
+                self.set(destination, R::sign_extended_double([
+                    mmu.get(address.unsigned()),
+                    mmu.get(address.append(1)),
+                    mmu.get(address.append(2)),
+                    mmu.get(address.append(3)),
+                    mmu.get(address.append(4)),
+                    mmu.get(address.append(5)),
+                    mmu.get(address.append(6)),
+                    mmu.get(address.append(7))
                 ]));
                 Ok(self.step())
             },
@@ -306,12 +400,14 @@ pub trait Mmu<R: Register> {
 }
 
 pub enum DecodeError {
-    UnknownInstruction(u8, u8, u8)
+    UnknownInstruction(u8, u8, u8),
+    ShiftWordReservedBit
 }
 impl std::fmt::Debug for DecodeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::UnknownInstruction(opcode, funct3, funct7) => write!(f, "UnknownInstruction(opcode: {:#b}, funct3: {:#b}, funct7: {:#b})", opcode, funct3, funct7)
+            Self::UnknownInstruction(opcode, funct3, funct7) => write!(f, "UnknownInstruction(opcode: {:#b}, funct3: {:#b}, funct7: {:#b})", opcode, funct3, funct7),
+            Self::ShiftWordReservedBit => write!(f, "Shift *W instruction was used with immediate[5] set. This bit is reserved.")
         }
     }
 }

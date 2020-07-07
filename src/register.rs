@@ -244,3 +244,216 @@ impl Default for Register32 {
         Self([0, 0, 0, 0])
     }
 }
+
+/// A 64-bit value with byte-order and sign independent actions
+#[derive(Clone, Copy, Debug)]
+pub struct Register64(pub [u8; 8]);
+impl Xlen for Register64 {
+    type Signed = i64;
+    type Unsigned = u64;
+    type Bytes = [u8; 8];
+    const WIDTH: RegisterWidth = RegisterWidth::Bits32;
+    fn signed(self) -> i64 {
+        i64::from_le_bytes(self.0)
+    }
+    fn unsigned(self) -> u64 {
+        u64::from_le_bytes(self.0)
+    }
+    fn from_signed(from: i64) -> Self {
+        Self(from.to_le_bytes())
+    }
+    fn from_unsigned(from: u64) -> Self {
+        Self(from.to_le_bytes())
+    }
+    fn append(self, value: usize) -> u64 {
+        self.unsigned() + value as u64
+    }
+}
+impl Register for Register64 {
+    #[inline]
+    fn sign_extended_byte(byte: u8) -> Self {
+        let extended = if byte & 0x80 != 0 { 0xFF } else { 0 };
+        Self([byte, extended, extended, extended, extended, extended, extended, extended])
+    }
+    #[inline]
+    fn zero_extended_byte(byte: u8) -> Self {
+        Self([byte, 0, 0, 0, 0, 0, 0, 0])
+    }
+    #[inline]
+    fn sign_extended_half(half: [u8; 2]) -> Self {
+        let extended = if half[1] & 0x80 != 0 { 0xFF } else { 0 };
+        Self([half[0], half[1], extended, extended, extended, extended, extended, extended])
+    }
+    #[inline]
+    fn zero_extended_half(half: [u8; 2]) -> Self {
+        Self([half[0], half[1], 0, 0, 0, 0, 0, 0])
+    }
+    #[inline(always)]
+    fn sign_extended_word(word: [u8; 4]) -> Self {
+        let extended = if word[3] & 0x80 != 0 { 0xFF } else { 0 };
+        Self([word[0], word[1], word[2], word[3], extended, extended, extended, extended])
+    }
+    #[inline(always)]
+    fn zero_extended_word(word: [u8; 4]) -> Self {
+        Self([word[0], word[1], word[2], word[3], 0, 0, 0, 0])
+    }
+    #[inline(always)]
+    fn sign_extended_double(double: [u8; 8]) -> Self {
+        Self(double)
+    }
+    #[inline(always)]
+    fn zero_extended_double(double: [u8; 8]) -> Self {
+        Self(double)
+    }
+
+    #[inline(always)]
+    fn byte(self) -> u8 { self.0[0] }
+    #[inline(always)]
+    fn half(self) -> [u8; 2] { [self.0[0], self.0[1]] }
+    #[inline(always)]
+    fn word(self) -> [u8; 4] { [self.0[0], self.0[1], self.0[2], self.0[3]] }
+    #[inline(always)]
+    fn double(self) -> [u8; 8] { self.0 }
+}
+impl Default for Register64 {
+    fn default() -> Self {
+        Self([0, 0, 0, 0, 0, 0, 0, 0])
+    }
+}
+
+/// A native register-sized value with byte-order and sign independent actions
+#[cfg(not(target_pointer_width = "16"))]
+#[derive(Clone, Copy, Debug)]
+pub struct RegisterSize(pub [u8; std::mem::size_of::<usize>()]);
+#[cfg(not(target_pointer_width = "16"))]
+impl Xlen for RegisterSize {
+    type Signed = isize;
+    type Unsigned = usize;
+    type Bytes = [u8; std::mem::size_of::<usize>()];
+
+    #[cfg(target_pointer_width = "32")]
+    const WIDTH: RegisterWidth = RegisterWidth::Bits32;
+    #[cfg(target_pointer_width = "64")]
+    const WIDTH: RegisterWidth = RegisterWidth::Bits64;
+    #[cfg(target_pointer_width = "128")]
+    const WIDTH: RegisterWidth = RegisterWidth::Bits128;
+
+    fn signed(self) -> isize {
+        isize::from_le_bytes(self.0)
+    }
+    fn unsigned(self) -> usize {
+        usize::from_le_bytes(self.0)
+    }
+    fn from_signed(from: isize) -> Self {
+        Self(from.to_le_bytes())
+    }
+    fn from_unsigned(from: usize) -> Self {
+        Self(from.to_le_bytes())
+    }
+    fn append(self, value: usize) -> usize {
+        self.unsigned() + value as usize
+    }
+}
+#[cfg(not(target_pointer_width = "16"))]
+impl Register for RegisterSize {
+    #[inline]
+    fn sign_extended_byte(byte: u8) -> Self {
+        let extended = if byte & 0x80 != 0 { 0xFF } else { 0 };
+        #[cfg(target_pointer_width = "32")]
+        {Self([byte, extended, extended, extended])}
+        #[cfg(target_pointer_width = "64")]
+        {Self([byte, extended, extended, extended, extended, extended, extended, extended])}
+        #[cfg(target_pointer_width = "128")]
+        {Self([byte, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended])}
+    }
+    #[inline]
+    fn zero_extended_byte(byte: u8) -> Self {
+        #[cfg(target_pointer_width = "32")]
+        {Self([byte, 0, 0, 0])}
+        #[cfg(target_pointer_width = "64")]
+        {Self([byte, 0, 0, 0, 0, 0, 0, 0])}
+        #[cfg(target_pointer_width = "128")]
+        {Self([byte, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])}
+    }
+    #[inline]
+    fn sign_extended_half(half: [u8; 2]) -> Self {
+        let extended = if half[1] & 0x80 != 0 { 0xFF } else { 0 };
+        #[cfg(target_pointer_width = "32")]
+        {Self([half[0], half[1], extended, extended])}
+        #[cfg(target_pointer_width = "64")]
+        {Self([half[0], half[1], extended, extended, extended, extended, extended, extended])}
+        #[cfg(target_pointer_width = "128")]
+        {Self([half[0], half[1], extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended])}
+    }
+    #[inline]
+    fn zero_extended_half(half: [u8; 2]) -> Self {
+        #[cfg(target_pointer_width = "32")]
+        {Self([half[0], half[1], 0, 0])}
+        #[cfg(target_pointer_width = "64")]
+        {Self([half[0], half[1], 0, 0, 0, 0, 0, 0])}
+        #[cfg(target_pointer_width = "128")]
+        {Self([half[0], half[1], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])}
+    }
+    #[inline(always)]
+    fn sign_extended_word(word: [u8; 4]) -> Self {
+        let extended = if word[3] & 0x80 != 0 { 0xFF } else { 0 };
+        #[cfg(target_pointer_width = "32")]
+        {Self(word)}
+        #[cfg(target_pointer_width = "64")]
+        {Self([word[0], word[1], word[2], word[3], extended, extended, extended, extended])}
+        #[cfg(target_pointer_width = "128")]
+        {Self([word[0], word[1], word[2], word[3], extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended])}
+    }
+    #[inline(always)]
+    fn zero_extended_word(word: [u8; 4]) -> Self {
+        #[cfg(target_pointer_width = "32")]
+        {Self(word)}
+        #[cfg(target_pointer_width = "64")]
+        {Self([word[0], word[1], word[2], word[3], 0, 0, 0, 0])}
+        #[cfg(target_pointer_width = "128")]
+        {Self([word[0], word[1], word[2], word[3], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])}
+    }
+    #[inline(always)]
+    fn sign_extended_double(double: [u8; 8]) -> Self {
+        #[cfg(target_pointer_width = "32")]
+        {panic!("Cannot create a 32 bit register from a 64 bit value")}
+        #[cfg(target_pointer_width = "64")]
+        {Self(double)}
+        #[cfg(target_pointer_width = "128")]
+        {Self([double[0], double[1], double[2], double[3], double[4], double[5], double[6], double[7], extended, extended, extended, extended, extended, extended, extended, extended])}
+    }
+    #[inline(always)]
+    fn zero_extended_double(double: [u8; 8]) -> Self {
+        #[cfg(target_pointer_width = "32")]
+        {panic!("Cannot create a 32 bit register from a 64 bit value")}
+        #[cfg(target_pointer_width = "64")]
+        {Self(double)}
+        #[cfg(target_pointer_width = "128")]
+        {Self([double[0], double[1], double[2], double[3], double[4], double[5], double[6], double[7], 0, 0, 0, 0, 0, 0, 0, 0])}
+    }
+
+    #[inline(always)]
+    fn byte(self) -> u8 { self.0[0] }
+    #[inline(always)]
+    fn half(self) -> [u8; 2] { [self.0[0], self.0[1]] }
+    #[inline(always)]
+    fn word(self) -> [u8; 4] { [self.0[0], self.0[1], self.0[2], self.0[3]] }
+    #[inline(always)]
+    fn double(self) -> [u8; 8] {
+        #[cfg(not(target_pointer_width = "32"))]
+        {[self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], self.0[6], self.0[7]]}
+        #[cfg(target_pointer_width = "32")]
+        {panic!("Cannot create a 64 bit value from a 32 bit register")}
+    }
+}
+#[cfg(not(target_pointer_width = "16"))]
+impl Default for RegisterSize {
+    fn default() -> Self {
+        #[cfg(target_pointer_width = "32")]
+        {Self([0, 0, 0, 0])}
+        #[cfg(target_pointer_width = "64")]
+        {Self([0, 0, 0, 0, 0, 0, 0, 0])}
+        #[cfg(target_pointer_width = "128")]
+        {Self([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])}
+    }
+}

@@ -3,8 +3,13 @@ name = "rysk-core"
 version = "0.0.1"
 authors = ["AidoP <aidop@me.com>"]
 edition = "2018"
+description = "RISCV instruction decoding and execution"
+repository = "https://github.com/AidoP/rysk-core"
+readme = "readme.md"
 license = "MIT"
-license-file = "LICENSE"
+
+categories = ["emulators"]
+keywords = ["riscv", "RISC-V", "virtualisation"]
 
 [features]
 default = []

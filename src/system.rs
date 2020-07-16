@@ -66,7 +66,7 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
         }
     }
 
-    /// Get a value from a CSR
+    /// Get a value from a CSR. May have side-effects
     #[cfg(feature = "ext-csr")]
     pub fn get_csr(&self, index: usize) -> Result<R, Exception> {
         match index {
@@ -143,7 +143,7 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
         }
     }
 
-    /// Set a CSR to the specified value with program-defined access
+    /// Set a CSR to the specified value with program-defined access. May have side-effects
     #[cfg(feature = "ext-csr")]
     pub fn set_csr(&mut self, index: usize, value: R) {
         match index {
@@ -163,7 +163,8 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
 
     /// Decode and execute an instruction
     #[allow(clippy::cognitive_complexity)]
-    pub fn execute(&mut self, instruction: [u8; 4], mmu: &mut dyn Mmu<R>) -> Result<(), Exception> {
+    pub fn execute(&mut self, mmu: &mut dyn Mmu<R>) -> Result<(), Exception> {
+        let instruction = mmu.fetch(self.pc);
         let opcode = instruction[0] & 0x7F;
         let funct3 = (instruction[1] & 0x70) >> 4;
         let funct7 = (instruction[3] & 0xFE) >> 1;
@@ -592,13 +593,25 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
     }
 }
 
+/// A Memory Management Unit (MMU) handles memory accesses on the system
+/// Devices and memory regions other than working memory (ie. RAM) may be mapped by way of the MMU
 pub trait Mmu<R: Register> {
     /// Get the byte at the given address
     fn get(&self, address: R::Unsigned) -> u8;
     /// Set the byte at the given address
     fn set(&mut self, address: R::Unsigned, value: u8);
+    /// Fetch an instruction to execute
+    fn fetch(&self, address: R) -> [u8; 4] {
+        [
+            self.get(address.unsigned()),
+            self.get(address.append(1)),
+            self.get(address.append(2)),
+            self.get(address.append(3))
+        ]
+    }
 }
 
+/// An exception thrown by a hart during instruction decoding and execution
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Exception {
     IllegalInstruction,

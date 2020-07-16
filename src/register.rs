@@ -85,7 +85,7 @@ pub trait Xlen {
 }
 
 /// Operations on a register carried out by system instructions
-pub trait Register: Xlen + Sized + Default {
+pub trait Register: Xlen + Sized + Default + Copy {
     /// Add 2 registers with signed arithmetic
     fn add_signed(self, other: Self) -> Self {
         Self::from_signed(self.signed().add(other.signed()))

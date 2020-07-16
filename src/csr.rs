@@ -1,5 +1,7 @@
 use crate::register::{Register,Register32,Register64};
 
+/// The Control Status Registers (CSR) a single HART must provide storage for to comply with the privileged ISA
+/// Other CSR's may not need storage and as such are not a part of this struct
 pub struct Csr<R: Register> {
     /// The ID of this hart
     pub mhartid: R,

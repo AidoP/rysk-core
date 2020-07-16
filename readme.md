@@ -8,8 +8,7 @@ If you are looking for a working virtual machine you want [Rysk](https://gitlab.
 First, add a dependency to your `Cargo.toml`:
 ```toml
     [dependencies]
-    # Note, this will not work until the crate is published to crates.io
-    rysk-core = "0.0.1"
+    rysk-core = "0.0.2"
 ```
 
 Then in your project,
@@ -47,14 +46,15 @@ Future Goals
 > 
 > If an instruction does not behave as specified please leave an issue
 
-| Extension     | Support |
+|   Extension   | Support |
 | :-----------: | :-----: |
 | RV32I         | Partial |
-| RV32E         | None^1  |
+| RV32E         | None*   |
 | RV64I         | Full    |
 | RV128I        | None    |
 | *Zifencei*    | None    |
-| *Zicsr*       | None    |
+| *Zicsr*       | Partial |
+| N             | None    |
 | M             | None    |
 | A             | None    |
 | F             | None    |
@@ -66,11 +66,21 @@ Future Goals
 | *Zam*         | N/A     |
 | *Ztso*        | Always  |
 
-> Support for the embedded extension is low priority. Const-generics will make implementing this feature much cleaner and as such supporting RV32E is not planned until const-generics land in stable Rust.
+> *Support for the embedded extension is low priority. Const-generics will make implementing this feature much cleaner and as such supporting RV32E is not planned until const-generics land in stable Rust.
 
 ### Privilege Levels
-| Level      | Support |
+|    Level   | Support |
 | :--------: | :-----: |
 | Machine    | Partial |
 | Supervisor | None    |
 | User       | None    |
+
+# Extensions
+Most extensions are enabled through cargo features.
+
+| Extension |   Feature   |
+| :-------: | :---------: |
+| *Zicsr*   | **default** |
+| *Zicsr*   | ext-csr     |
+
+The base extension (RV32I, RV64I or RV128I) is set through the generic register type used. `MXLEN` cannot be changed by RISCV programs (ie. `misa[MXLEN]` is read-only).

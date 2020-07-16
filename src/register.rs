@@ -58,9 +58,11 @@ pub enum RegisterWidth {
 
 /// Byte order independent interpretations for a register
 pub trait Xlen {
-    type Signed: Integer;
-    type Unsigned: Integer;
-    type Bytes;
+    /// The concrete signed type that the inner value represents
+    type Signed: Integer + Copy;
+    /// The concrete unsigned type that the inner value represents
+    type Unsigned: Integer + Copy;
+    /// The width of the register. Defines the available instruction set (ie. RV32I, RV64I or RV128I)
     const WIDTH: RegisterWidth;
 
     /// Interpret the register as a signed value
@@ -75,10 +77,12 @@ pub trait Xlen {
 
     /// Return the unsigned value added to an unsigned system-native value
     fn append(self, offset: usize) -> Self::Unsigned;
+    /// Return the value as an unsigned system-native value
+    fn usize(self) -> usize;
 }
 
 /// Operations on a register carried out by system instructions
-pub trait Register: Xlen + Sized {
+pub trait Register: Xlen + Sized + Default {
     /// Add 2 registers with signed arithmetic
     fn add_signed(self, other: Self) -> Self {
         Self::from_signed(self.signed().add(other.signed()))
@@ -170,13 +174,12 @@ pub trait Register: Xlen + Sized {
     fn double(self) -> [u8; 8];
 }
 
-/// A 32-bit value with byte-order and sign independent actions
+/// A 32-bit value with byte-order and sign independent operations
 #[derive(Clone, Copy, Debug)]
 pub struct Register32(pub [u8; 4]);
 impl Xlen for Register32 {
     type Signed = i32;
     type Unsigned = u32;
-    type Bytes = [u8; 4];
     const WIDTH: RegisterWidth = RegisterWidth::Bits32;
     fn signed(self) -> i32 {
         i32::from_le_bytes(self.0)
@@ -192,6 +195,9 @@ impl Xlen for Register32 {
     }
     fn append(self, value: usize) -> u32 {
         self.unsigned() + value as u32
+    }
+    fn usize(self) -> usize {
+        self.unsigned() as usize
     }
 }
 impl Register for Register32 {
@@ -245,13 +251,19 @@ impl Default for Register32 {
     }
 }
 
-/// A 64-bit value with byte-order and sign independent actions
+/// A 64-bit value with byte-order and sign independent operations
 #[derive(Clone, Copy, Debug)]
 pub struct Register64(pub [u8; 8]);
+impl Register64 {
+    /// Split the 64 bit register into 2 32 bit registers
+    /// The lower word is returned as the first item in the tuple
+    pub fn split(self) -> (Register32, Register32) {
+        (Register32([self.0[0], self.0[1], self.0[2], self.0[3]]), Register32([self.0[4], self.0[5], self.0[6], self.0[7]]))
+    }
+}
 impl Xlen for Register64 {
     type Signed = i64;
     type Unsigned = u64;
-    type Bytes = [u8; 8];
     const WIDTH: RegisterWidth = RegisterWidth::Bits32;
     fn signed(self) -> i64 {
         i64::from_le_bytes(self.0)
@@ -267,6 +279,9 @@ impl Xlen for Register64 {
     }
     fn append(self, value: usize) -> u64 {
         self.unsigned() + value as u64
+    }
+    fn usize(self) -> usize {
+        self.unsigned() as usize
     }
 }
 impl Register for Register64 {
@@ -329,7 +344,6 @@ pub struct RegisterSize(pub [u8; std::mem::size_of::<usize>()]);
 impl Xlen for RegisterSize {
     type Signed = isize;
     type Unsigned = usize;
-    type Bytes = [u8; std::mem::size_of::<usize>()];
 
     #[cfg(target_pointer_width = "32")]
     const WIDTH: RegisterWidth = RegisterWidth::Bits32;
@@ -352,6 +366,9 @@ impl Xlen for RegisterSize {
     }
     fn append(self, value: usize) -> usize {
         self.unsigned() + value as usize
+    }
+    fn usize(self) -> usize {
+        self.unsigned()
     }
 }
 #[cfg(not(target_pointer_width = "16"))]

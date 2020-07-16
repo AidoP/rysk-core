@@ -1,21 +1,88 @@
-use crate::register::{Register,Register32,RegisterWidth};
+use crate::register::{Register,Register32,Register64,RegisterWidth};
 use crate::{variant,Variant};
+use crate::version;
 
 /// A single RISCV core
 /// Includes a single program counter and 32 registers
 /// Const generics will allow support of the E extensions for 16 registers
 pub struct Core<R: Register> {
+    /// The 32 general-purpose registers
+    /// Although all registers are general purpose in RISCV, their usage is still dictated by the standard calling convention.
+    /// Register 0 always has a value of 0
     registers: [R; 32],
 
-    pub pc: R
+    /// The program counter
+    pub pc: R,
+
+    // CSR registers
+    /// The ID of this hart
+    #[cfg(feature = "ext-csr")]
+    mhartid: R,
+    /// The address of a potentially vectorised interupt handler
+    #[cfg(feature = "ext-csr")]
+    mtvec: R,
+    /// Delegation of exceptions to lower modes
+    #[cfg(feature = "ext-csr")]
+    medeleg: R,
+    /// Delegation of interrupts to lower modes
+    #[cfg(feature = "ext-csr")]
+    mideleg: R,
+    /// Sets if interrupts are enabled
+    #[cfg(feature = "ext-csr")]
+    mie: R,
+    /// States if an interrupt is pending
+    #[cfg(feature = "ext-csr")]
+    mip: R,
+    /// Counts the number of cycles the hart has executed. As there is no speculative execution or other operations minstret is the same as this value
+    #[cfg(feature = "ext-csr")]
+    mcycle: Register64,
+    /// Determine if counters are accessible in lower privilege modes
+    #[cfg(feature = "ext-csr")]
+    mcounteren: Register32,
+    /// Scratch register dedicated to machine-mode usage
+    #[cfg(feature = "ext-csr")]
+    mscratch: R,
+    /// The virtual address of an interrupted or excepted instruction in machine-mode
+    #[cfg(feature = "ext-csr")]
+    mepc: R,
+    /// The cause of an interrupt or exception
+    #[cfg(feature = "ext-csr")]
+    mcause: R,
+    /// An implementation-defined value set during a trap
+    #[cfg(feature = "ext-csr")]
+    mtval: R,
 }
 impl<R: Register + Default + Copy + Clone> Core<R> {
     /// Creates a new core starting execution at the given address
     /// address must be aligned to 4 bytes else a panic will occur during execution
+    #[cfg(not(feature = "ext-csr"))]
     pub fn new(address: R::Unsigned) -> Self {
         Self {
             registers: [Default::default(); 32],
             pc: R::from_unsigned(address)
+        }
+    }
+
+    /// Creates a new core starting execution at the given address with the given hart ID
+    /// Hart ID's must be unique to ensure correct program behaviour. There must be a hart with ID 0 on a given system
+    /// address must be aligned to 4 bytes else a panic will occur during execution
+    #[cfg(feature = "ext-csr")]
+    pub fn new(address: R::Unsigned, hart: R::Unsigned) -> Self {
+        Self {
+            registers: [Default::default(); 32],
+            pc: R::from_unsigned(address),
+            mhartid: R::from_unsigned(hart),
+            mtvec: R::from_unsigned(address),
+            medeleg: Default::default(),
+            mideleg: Default::default(),
+            mie: Default::default(),
+            mip: Default::default(),
+            mcycle: Default::default(),
+            mcounteren: Default::default(),
+            mscratch: Default::default(),
+            mepc: Default::default(),
+            mcause: Default::default(),
+            mtval: Default::default()
         }
     }
 
@@ -42,11 +109,110 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
         }
     }
 
+    /// Get a value from a CSR
+    #[cfg(feature = "ext-csr")]
+    pub fn get_csr(&self, index: usize) -> Result<R, Exception> {
+        match index {
+            // mstatus
+            0x300 => unimplemented!(),
+            // misa
+            0x301 => {
+                const I: u8 = 1 << 7;
+
+                let isa0 = I;
+                let isa1 = 0;
+                let isa2 = 0;
+                let isa3 = 0;
+
+                const MXLEN32: u8 = 1;
+                const MXLEN64: u8 = 2;
+                const _MXLEN128: u8 = 3;
+                Ok(
+                    match R::WIDTH {
+                        RegisterWidth::Bits32 => R::zero_extended_word([isa0, isa1, isa2, isa3 | MXLEN32 << 6]),
+                        RegisterWidth::Bits64 => R::zero_extended_double([isa0, isa1, isa2, isa3, 0, 0, 0, MXLEN64 << 6]),
+                        RegisterWidth::Bits128 => unimplemented!(),
+                    }
+                )
+            },
+            // medeleg
+            0x302 => Ok(self.medeleg),
+            // mideleg
+            0x303 => Ok(self.mideleg),
+            // mie
+            0x304 => Ok(self.mie),
+            // mtvec
+            0x305 => Ok(self.mtvec),
+            // mcounteren
+            0x306 => Ok(R::zero_extended_word(self.mcounteren.word())),
+
+            // mscratch
+            0x340 => Ok(self.mscratch),
+            // mepc
+            0x341 => Ok(self.mepc),
+            // mcause
+            0x342 => Ok(self.mcause),
+            // mtval
+            0x343 => Ok(self.mtval),
+            // mip
+            0x344 => Ok(self.mip),
+
+            // mcycle and mcycleh
+            0xB00 if R::WIDTH != RegisterWidth::Bits32 => Ok(R::zero_extended_double(self.mcycle.double())),
+            0xB00 if R::WIDTH == RegisterWidth::Bits32 => Ok(R::zero_extended_word((self.mcycle.split().0).0)),
+            0xB80 if R::WIDTH == RegisterWidth::Bits32 => Ok(R::zero_extended_word((self.mcycle.split().1).0)),
+            // minstret - Currently the same as mcycle
+            0xB02 if R::WIDTH != RegisterWidth::Bits32 => Ok(R::zero_extended_double(self.mcycle.double())),
+            0xB02 if R::WIDTH == RegisterWidth::Bits32 => Ok(R::zero_extended_word((self.mcycle.split().0).0)),
+            0xB82 if R::WIDTH == RegisterWidth::Bits32 => Ok(R::zero_extended_word((self.mcycle.split().1).0)),
+            // Unused performance counters
+            0xB03..=0xB1F => Ok(R::default()),
+            0xB83..=0xB9F if R::WIDTH == RegisterWidth::Bits32 => Ok(R::default()),
+            // Unused performance event selectors
+            0xB23..=0xB3F => Ok(R::default()),
+
+            // mvendorid
+            // Requires a JEDEC vendor ID
+            0xF11 => Ok(R::default()),
+            // marchid
+            // In the future an Architecture ID shall be requested
+            0xF12 => Ok(R::default()),
+            // mimpid
+            // The version of rysk-core
+            0xF13 => Ok(R::zero_extended_word([version::PATCH, version::MINOR, version::MAJOR, 0])),
+            // mhartid
+            0xF14 => Ok(self.mhartid),
+            _ => Err(Exception::IllegalInstruction)
+        }
+    }
+
+    /// Set a CSR to the specified value with program-defined access
+    #[cfg(feature = "ext-csr")]
+    pub fn set_csr(&mut self, index: usize, value: R) {
+        match index {
+            // mie
+            0x304 => {
+                // WPRI fields must be hardwired to zero
+                self.mie = value.and(R::zero_extended_half([!0x44, !0xF4]))
+            },
+            // mip
+            0x344 => {
+                // WPRI fields must be hardwired to zero
+                self.mip = value.and(R::zero_extended_half([!0x44, !0xF4]))
+            },
+            _ => ()
+        }
+    }
+
     /// Decode and execute an instruction
-    pub fn execute(&mut self, instruction: [u8; 4], mmu: &mut dyn Mmu<R>) -> Result<(), DecodeError> {
+    pub fn execute(&mut self, instruction: [u8; 4], mmu: &mut dyn Mmu<R>) -> Result<(), Exception> {
         let opcode = instruction[0] & 0x7F;
         let funct3 = (instruction[1] & 0x70) >> 4;
         let funct7 = (instruction[3] & 0xFE) >> 1;
+
+        // Increment the cycle counter
+        #[cfg(feature = "ext-csr")]
+        {self.mcycle = self.mcycle.add_unsigned(Register64::zero_extended_byte(1))}
 
         match (opcode, funct3, funct7) {
             // ADD
@@ -193,7 +359,7 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             (0b0011011, 0b001, _) if R::WIDTH != RegisterWidth::Bits32 => {
                 let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
                 if immediate.byte() & 0x20 != 0 {
-                    Err(DecodeError::ShiftWordReservedBit)
+                    Err(Exception::ShiftWordReservedBit)
                 } else {
                     self.set(destination, R::sign_extended_word(Register32(self.get(source).word()).shl(Register32(immediate.word()).and(Register32::zero_extended_byte(0x0E))).word()));
                     Ok(self.step())
@@ -209,7 +375,7 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             (0b0011011, 0b101, _) if instruction[3] & 0x40 == 0 && R::WIDTH != RegisterWidth::Bits32 => {
                 let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
                 if immediate.byte() & 0x20 != 0 {
-                    Err(DecodeError::ShiftWordReservedBit)
+                    Err(Exception::ShiftWordReservedBit)
                 } else {
                     self.set(destination, R::sign_extended_word(Register32(self.get(source).word()).shr(Register32(immediate.word()).and(Register32::zero_extended_byte(0x0E))).word()));
                     Ok(self.step())
@@ -225,7 +391,7 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             (0b0011011, 0b101, _) if instruction[3] & 0x40 != 0 && R::WIDTH != RegisterWidth::Bits32 => {
                 let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
                 if immediate.byte() & 0x20 != 0 {
-                    Err(DecodeError::ShiftWordReservedBit)
+                    Err(Exception::ShiftWordReservedBit)
                 } else {
                     self.set(destination, R::sign_extended_word(Register32(self.get(source).word()).sha(Register32(immediate.word()).and(Register32::zero_extended_byte(0x0E))).word()));
                     Ok(self.step())
@@ -386,8 +552,22 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             (0b1100011, 0b111, _) => {
                 let variant::B { source1, source2, immediate } = Variant::decode(instruction);
                 Ok(if self.get(source1).gte_unsigned(self.get(source2)) { self.pc = self.pc.add_signed(immediate) } else { self.step() })
-            },
-            (opcode, funct3, funct7) => Err(DecodeError::UnknownInstruction(opcode, funct3, funct7))
+            }
+
+            // CSRRW
+            #[cfg(feature = "ext-csr")]
+            (0b1110011, 0b001, _) => {
+                let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
+                let csr = immediate.usize();
+                Ok(if destination != 0 {
+                    let temporary = self.get_csr(csr).expect("TODO: Exception signaling");
+                    self.set_csr(csr, self.get(source));
+                    self.set(destination, temporary)
+                } else {
+                    self.set_csr(csr, self.get(source))
+                })
+            }
+            (opcode, funct3, funct7) => Err(Exception::UnknownInstruction(opcode, funct3, funct7))
         }
     }
 }
@@ -399,13 +579,16 @@ pub trait Mmu<R: Register> {
     fn set(&mut self, address: R::Unsigned, value: u8);
 }
 
-pub enum DecodeError {
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum Exception {
+    IllegalInstruction,
     UnknownInstruction(u8, u8, u8),
     ShiftWordReservedBit
 }
-impl std::fmt::Debug for DecodeError {
+impl std::fmt::Debug for Exception {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::IllegalInstruction => write!(f, "Illegal value in instruction"),
             Self::UnknownInstruction(opcode, funct3, funct7) => write!(f, "UnknownInstruction(opcode: {:#b}, funct3: {:#b}, funct7: {:#b})", opcode, funct3, funct7),
             Self::ShiftWordReservedBit => write!(f, "Shift *W instruction was used with immediate[5] set. This bit is reserved.")
         }

@@ -1,8 +1,8 @@
 # Rysk Core
 RISCV decoding and execution primitives. All you need to implement your own virtual RISCV machine.
 
-## [Virtual Machine](https://gitlab.com//AidoP1/rysk)
-If you are looking for a working virtual machine you want [Rysk](https://gitlab.com//AidoP1/rysk). This is a library for building RISCV virtual machines.
+## [Virtual Machine](https://gitlab.com/AidoP1/rysk)
+If you are looking for a working virtual machine you want [Rysk](https://gitlab.com/AidoP1/rysk). This is a library for building RISCV virtual machines.
 
 # Usage
 First, add a dependency to your `Cargo.toml`:
@@ -33,11 +33,11 @@ Current Goals
 - [ ] Compatability with all platforms `std` supports
 - [ ] Support for RV32IMA and RV64IMA
 - [x] Dependency-free
+- [ ] Support for the Privileged ISA
 
 Future Goals
 - [ ] Performance
 - [ ] Support for all base extensions
-- [ ] Support for the Privileged ISA
 - [ ] Debugging tools
 
 # Compliance

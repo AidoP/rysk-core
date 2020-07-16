@@ -162,6 +162,7 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
     }
 
     /// Decode and execute an instruction
+    #[allow(clippy::cognitive_complexity)]
     pub fn execute(&mut self, instruction: [u8; 4], mmu: &mut dyn Mmu<R>) -> Result<(), Exception> {
         let opcode = instruction[0] & 0x7F;
         let funct3 = (instruction[1] & 0x70) >> 4;
@@ -512,8 +513,7 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             // CSRRW
             #[cfg(feature = "ext-csr")]
             (0b1110011, 0b001, _) => {
-                let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
-                let csr = immediate.usize();
+                let variant::C { destination, source, csr } = Variant::decode(instruction);
                 Ok(if destination != 0 {
                     let temporary = self.get_csr(csr).expect("TODO: Exception signaling");
                     self.set_csr(csr, self.get(source));
@@ -525,10 +525,9 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             // CSRRS
             #[cfg(feature = "ext-csr")]
             (0b1110011, 0b010, _) => {
-                let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
-                let csr = immediate.usize();
+                let variant::C { destination, source, csr } = Variant::decode(instruction);
                 let temporary = self.get_csr(csr).expect("TODO: Exception signaling");
-                Ok(if destination != 0 {
+                Ok(if source != 0 {
                     // Source is a bitmask which sets bits in the csr
                     self.set_csr(csr, temporary.or(self.get(source)));
                     self.set(destination, temporary)
@@ -539,12 +538,50 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             // CSRRC
             #[cfg(feature = "ext-csr")]
             (0b1110011, 0b011, _) => {
-                let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
-                let csr = immediate.usize();
+                let variant::C { destination, source, csr } = Variant::decode(instruction);
                 let temporary = self.get_csr(csr).expect("TODO: Exception signaling");
-                Ok(if destination != 0 {
+                Ok(if source != 0 {
                     // Source is a bitmask which clears bits in the csr
                     self.set_csr(csr, temporary.and(self.get(source).not()));
+                    self.set(destination, temporary)
+                } else {
+                    self.set(destination, temporary)
+                })
+            },
+            // CSRRWI
+            #[cfg(feature = "ext-csr")]
+            (0b1110011, 0b101, _) => {
+                let variant::C { destination, source, csr } = Variant::decode(instruction);
+                let immediate = R::zero_extended_byte(source as u8);
+                Ok(if destination != 0 {
+                    let temporary = self.get_csr(csr).expect("TODO: Exception signaling");
+                    self.set_csr(csr, immediate);
+                    self.set(destination, temporary)
+                } else {
+                    self.set_csr(csr, immediate)
+                })
+            },
+            // CSRRSI
+            #[cfg(feature = "ext-csr")]
+            (0b1110011, 0b110, _) => {
+                let variant::C { destination, source, csr } = Variant::decode(instruction);
+                let temporary = self.get_csr(csr).expect("TODO: Exception signaling");
+                Ok(if source != 0 {
+                    // Source is a bitmask which sets bits in the csr
+                    self.set_csr(csr, temporary.or(R::zero_extended_byte(source as u8)));
+                    self.set(destination, temporary)
+                } else {
+                    self.set(destination, temporary)
+                })
+            },
+            // CSRRCI
+            #[cfg(feature = "ext-csr")]
+            (0b1110011, 0b111, _) => {
+                let variant::C { destination, source, csr } = Variant::decode(instruction);
+                let temporary = self.get_csr(csr).expect("TODO: Exception signaling");
+                Ok(if source != 0 {
+                    // Source is a bitmask which clears bits in the csr
+                    self.set_csr(csr, temporary.and(R::zero_extended_byte(source as u8).not()));
                     self.set(destination, temporary)
                 } else {
                     self.set(destination, temporary)

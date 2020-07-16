@@ -48,6 +48,21 @@ impl<R: Register> Variant for I<R> {
     }
 }
 
+pub struct C {
+    pub destination: usize,
+    pub source: usize,
+    pub csr: usize
+}
+impl Variant for C {
+    fn decode(instruction: [u8; 4]) -> Self {
+        Self {
+            destination: destination(instruction),
+            source: source1(instruction),
+            csr: ((instruction[2] & 0xF0) >> 4) as usize | ((instruction[3] & 0x0F) << 4) as usize | ((instruction[3] & 0xF0) << 4) as usize
+        }
+    }
+}
+
 pub struct S<R: Register> {
     pub source1: usize,
     pub source2: usize,

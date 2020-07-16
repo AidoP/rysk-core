@@ -13,20 +13,8 @@ keywords = ["riscv", "RISC-V", "virtualisation"]
 
 [features]
 default = ["ext-csr"]
-
 ext-csr = []
-
 ext-m = []
-
-ext-f = []
-ext-d = []
-ext-q = []
-
-ext-a = []
-
-ext-c = []
 
 # RV32E may disable other features
 rv32e = []
-
-[dependencies]

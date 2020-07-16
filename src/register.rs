@@ -14,6 +14,7 @@ pub trait Integer {
     fn and(self, other: Self) -> Self;
     fn or(self, other: Self) -> Self;
     fn xor(self, other: Self) -> Self;
+    fn not(self) -> Self;
 }
 macro_rules! impl_integer {
     ($($name:ident),*) => {
@@ -43,6 +44,8 @@ macro_rules! impl_integer {
                 fn or(self, other: Self) -> Self { self | other }
                 #[inline(always)]
                 fn xor(self, other: Self) -> Self { self ^ other }
+                #[inline(always)]
+                fn not(self) -> Self { !self }
             }
         )*
     };
@@ -120,6 +123,10 @@ pub trait Register: Xlen + Sized + Default {
     /// Applies the bitwise XOR operation to self and other
     fn xor(self, other: Self) -> Self {
         Self::from_unsigned(self.unsigned().xor(other.unsigned()))
+    }
+    /// Applies the bitwise NOT operation to self
+    fn not(self) -> Self {
+        Self::from_unsigned(self.unsigned().not())
     }
 
     /// Tests if self is equal to other

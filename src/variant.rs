@@ -1,4 +1,4 @@
-use crate::Register;
+use crate::register::Register;
 
 pub trait Variant {
     fn decode(instruction: [u8; 4]) -> Self;

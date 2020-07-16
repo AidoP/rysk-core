@@ -5,9 +5,14 @@ pub mod variant;
 pub mod register;
 pub mod system;
 
-pub use variant::Variant;
-pub use register::{Register,Register32,Xlen};
-pub use system::{Core, Mmu};
+pub mod prelude {
+    pub use crate::variant::Variant;
+    pub use crate::register::{Register,Register32,Xlen};
+    pub use crate::system::{Core, Mmu};
+}
+
+#[cfg(feature = "ext-csr")]
+pub mod csr;
 
 pub mod version {
     pub const PATCH: u8 = 2;

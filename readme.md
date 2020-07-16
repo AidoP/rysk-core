@@ -83,4 +83,4 @@ Most extensions are enabled through cargo features.
 | *Zicsr*   | **default** |
 | *Zicsr*   | ext-csr     |
 
-The base extension (RV32I, RV64I or RV128I) is set through the generic register type used. `MXLEN` cannot be changed by RISCV programs (ie. `misa[MXLEN]` is read-only).
+The base extension (RV32I, RV64I or RV128I) is set through the generic register type used. `MXLEN` is a set at compile time and therefore cannot be changed by RISCV programs (ie. `misa[MXLEN]` is read-only).

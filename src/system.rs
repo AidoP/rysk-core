@@ -1,6 +1,8 @@
 use crate::register::{Register,Register32,Register64,RegisterWidth};
-use crate::{variant,Variant};
+use crate::variant::{self,Variant};
 use crate::version;
+#[cfg(feature = "ext-csr")]
+use crate::csr::Csr;
 
 /// A single RISCV core
 /// Includes a single program counter and 32 registers
@@ -15,42 +17,8 @@ pub struct Core<R: Register> {
     pub pc: R,
 
     // CSR registers
-    /// The ID of this hart
     #[cfg(feature = "ext-csr")]
-    mhartid: R,
-    /// The address of a potentially vectorised interupt handler
-    #[cfg(feature = "ext-csr")]
-    mtvec: R,
-    /// Delegation of exceptions to lower modes
-    #[cfg(feature = "ext-csr")]
-    medeleg: R,
-    /// Delegation of interrupts to lower modes
-    #[cfg(feature = "ext-csr")]
-    mideleg: R,
-    /// Sets if interrupts are enabled
-    #[cfg(feature = "ext-csr")]
-    mie: R,
-    /// States if an interrupt is pending
-    #[cfg(feature = "ext-csr")]
-    mip: R,
-    /// Counts the number of cycles the hart has executed. As there is no speculative execution or other operations minstret is the same as this value
-    #[cfg(feature = "ext-csr")]
-    mcycle: Register64,
-    /// Determine if counters are accessible in lower privilege modes
-    #[cfg(feature = "ext-csr")]
-    mcounteren: Register32,
-    /// Scratch register dedicated to machine-mode usage
-    #[cfg(feature = "ext-csr")]
-    mscratch: R,
-    /// The virtual address of an interrupted or excepted instruction in machine-mode
-    #[cfg(feature = "ext-csr")]
-    mepc: R,
-    /// The cause of an interrupt or exception
-    #[cfg(feature = "ext-csr")]
-    mcause: R,
-    /// An implementation-defined value set during a trap
-    #[cfg(feature = "ext-csr")]
-    mtval: R,
+    csr: Csr<R>
 }
 impl<R: Register + Default + Copy + Clone> Core<R> {
     /// Creates a new core starting execution at the given address
@@ -71,18 +39,7 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
         Self {
             registers: [Default::default(); 32],
             pc: R::from_unsigned(address),
-            mhartid: R::from_unsigned(hart),
-            mtvec: R::from_unsigned(address),
-            medeleg: Default::default(),
-            mideleg: Default::default(),
-            mie: Default::default(),
-            mip: Default::default(),
-            mcycle: Default::default(),
-            mcounteren: Default::default(),
-            mscratch: Default::default(),
-            mepc: Default::default(),
-            mcause: Default::default(),
-            mtval: Default::default()
+            csr: Csr::new(hart, address)
         }
     }
 
@@ -136,35 +93,35 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
                 )
             },
             // medeleg
-            0x302 => Ok(self.medeleg),
+            0x302 => Ok(self.csr.medeleg),
             // mideleg
-            0x303 => Ok(self.mideleg),
+            0x303 => Ok(self.csr.mideleg),
             // mie
-            0x304 => Ok(self.mie),
+            0x304 => Ok(self.csr.mie),
             // mtvec
-            0x305 => Ok(self.mtvec),
+            0x305 => Ok(self.csr.mtvec),
             // mcounteren
-            0x306 => Ok(R::zero_extended_word(self.mcounteren.word())),
+            0x306 => Ok(R::zero_extended_word(self.csr.mcounteren.word())),
 
             // mscratch
-            0x340 => Ok(self.mscratch),
+            0x340 => Ok(self.csr.mscratch),
             // mepc
-            0x341 => Ok(self.mepc),
+            0x341 => Ok(self.csr.mepc),
             // mcause
-            0x342 => Ok(self.mcause),
+            0x342 => Ok(self.csr.mcause),
             // mtval
-            0x343 => Ok(self.mtval),
+            0x343 => Ok(self.csr.mtval),
             // mip
-            0x344 => Ok(self.mip),
+            0x344 => Ok(self.csr.mip),
 
             // mcycle and mcycleh
-            0xB00 if R::WIDTH != RegisterWidth::Bits32 => Ok(R::zero_extended_double(self.mcycle.double())),
-            0xB00 if R::WIDTH == RegisterWidth::Bits32 => Ok(R::zero_extended_word((self.mcycle.split().0).0)),
-            0xB80 if R::WIDTH == RegisterWidth::Bits32 => Ok(R::zero_extended_word((self.mcycle.split().1).0)),
+            0xB00 if R::WIDTH != RegisterWidth::Bits32 => Ok(R::zero_extended_double(self.csr.mcycle.double())),
+            0xB00 if R::WIDTH == RegisterWidth::Bits32 => Ok(R::zero_extended_word((self.csr.mcycle.split().0).0)),
+            0xB80 if R::WIDTH == RegisterWidth::Bits32 => Ok(R::zero_extended_word((self.csr.mcycle.split().1).0)),
             // minstret - Currently the same as mcycle
-            0xB02 if R::WIDTH != RegisterWidth::Bits32 => Ok(R::zero_extended_double(self.mcycle.double())),
-            0xB02 if R::WIDTH == RegisterWidth::Bits32 => Ok(R::zero_extended_word((self.mcycle.split().0).0)),
-            0xB82 if R::WIDTH == RegisterWidth::Bits32 => Ok(R::zero_extended_word((self.mcycle.split().1).0)),
+            0xB02 if R::WIDTH != RegisterWidth::Bits32 => Ok(R::zero_extended_double(self.csr.mcycle.double())),
+            0xB02 if R::WIDTH == RegisterWidth::Bits32 => Ok(R::zero_extended_word((self.csr.mcycle.split().0).0)),
+            0xB82 if R::WIDTH == RegisterWidth::Bits32 => Ok(R::zero_extended_word((self.csr.mcycle.split().1).0)),
             // Unused performance counters
             0xB03..=0xB1F => Ok(R::default()),
             0xB83..=0xB9F if R::WIDTH == RegisterWidth::Bits32 => Ok(R::default()),
@@ -181,7 +138,7 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             // The version of rysk-core
             0xF13 => Ok(R::zero_extended_word([version::PATCH, version::MINOR, version::MAJOR, 0])),
             // mhartid
-            0xF14 => Ok(self.mhartid),
+            0xF14 => Ok(self.csr.mhartid),
             _ => Err(Exception::IllegalInstruction)
         }
     }
@@ -193,12 +150,12 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             // mie
             0x304 => {
                 // WPRI fields must be hardwired to zero
-                self.mie = value.and(R::zero_extended_half([!0x44, !0xF4]))
+                self.csr.mie = value.and(R::zero_extended_half([!0x44, !0xF4]))
             },
             // mip
             0x344 => {
                 // WPRI fields must be hardwired to zero
-                self.mip = value.and(R::zero_extended_half([!0x44, !0xF4]))
+                self.csr.mip = value.and(R::zero_extended_half([!0x44, !0xF4]))
             },
             _ => ()
         }
@@ -212,8 +169,9 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
 
         // Increment the cycle counter
         #[cfg(feature = "ext-csr")]
-        {self.mcycle = self.mcycle.add_unsigned(Register64::zero_extended_byte(1))}
+        {self.csr.mcycle = self.csr.mcycle.add_unsigned(Register64::zero_extended_byte(1))}
 
+        #[allow(clippy::unreadable_literal)]
         match (opcode, funct3, funct7) {
             // ADD
             (0b0110011, 0b000, 0b0000000) => {
@@ -515,9 +473,6 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             // JALR
             (0b1100111, 0b000, _) => {
                 let variant::I { destination, source, immediate } = Variant::decode(instruction);
-                // Despite source and immediate being unrelated to pc and destination
-                // And Register being pure, the target address must be calculated first, else an off by 4 error occurs
-                // Please let me know if you know why, it is likely to give me a good chuckle 
                 let to_set = self.get(source).add_signed(immediate);
                 self.set(destination, self.pc.add_unsigned(R::zero_extended_byte(4)));
                 Ok(self.pc = to_set)
@@ -552,7 +507,7 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             (0b1100011, 0b111, _) => {
                 let variant::B { source1, source2, immediate } = Variant::decode(instruction);
                 Ok(if self.get(source1).gte_unsigned(self.get(source2)) { self.pc = self.pc.add_signed(immediate) } else { self.step() })
-            }
+            },
 
             // CSRRW
             #[cfg(feature = "ext-csr")]
@@ -566,7 +521,35 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
                 } else {
                     self.set_csr(csr, self.get(source))
                 })
-            }
+            },
+            // CSRRS
+            #[cfg(feature = "ext-csr")]
+            (0b1110011, 0b010, _) => {
+                let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
+                let csr = immediate.usize();
+                let temporary = self.get_csr(csr).expect("TODO: Exception signaling");
+                Ok(if destination != 0 {
+                    // Source is a bitmask which sets bits in the csr
+                    self.set_csr(csr, temporary.or(self.get(source)));
+                    self.set(destination, temporary)
+                } else {
+                    self.set(destination, temporary)
+                })
+            },
+            // CSRRC
+            #[cfg(feature = "ext-csr")]
+            (0b1110011, 0b011, _) => {
+                let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
+                let csr = immediate.usize();
+                let temporary = self.get_csr(csr).expect("TODO: Exception signaling");
+                Ok(if destination != 0 {
+                    // Source is a bitmask which clears bits in the csr
+                    self.set_csr(csr, temporary.and(self.get(source).not()));
+                    self.set(destination, temporary)
+                } else {
+                    self.set(destination, temporary)
+                })
+            },
             (opcode, funct3, funct7) => Err(Exception::UnknownInstruction(opcode, funct3, funct7))
         }
     }

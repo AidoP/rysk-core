@@ -4,25 +4,25 @@ use crate::version;
 #[cfg(feature = "ext-csr")]
 use crate::csr::Csr;
 
-/// A single RISCV core
-/// Includes a single program counter and 32 registers
-/// Const generics will allow support of the E extensions for 16 registers
+/// A single RISCV core.
+/// Includes a single program counter and 32 registers.
+/// Const generics will allow support of the E extensions for 16 registers.
 pub struct Core<R: Register> {
-    /// The 32 general-purpose registers
+    /// The 32 general-purpose registers.
     /// Although all registers are general purpose in RISCV, their usage is still dictated by the standard calling convention.
-    /// Register 0 always has a value of 0
+    /// Register 0 always has a value of 0.
     registers: [R; 32],
 
     /// The program counter
     pub pc: R,
 
-    // CSR registers
+    /// CSR registers
     #[cfg(feature = "ext-csr")]
     csr: Csr<R>
 }
 impl<R: Register + Default + Copy + Clone> Core<R> {
-    /// Creates a new core starting execution at the given address
-    /// address must be aligned to 4 bytes else a panic will occur during execution
+    /// Creates a new core starting execution at the given address.
+    /// address must be aligned to 4 bytes else a panic will occur during execution.
     #[cfg(not(feature = "ext-csr"))]
     pub fn new(address: R::Unsigned) -> Self {
         Self {
@@ -31,9 +31,9 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
         }
     }
 
-    /// Creates a new core starting execution at the given address with the given hart ID
-    /// Hart ID's must be unique to ensure correct program behaviour. There must be a hart with ID 0 on a given system
-    /// address must be aligned to 4 bytes else a panic will occur during execution
+    /// Creates a new core starting execution at the given address with the given hart ID.
+    /// Hart ID's must be unique to ensure correct program behaviour. There must be a hart with ID 0 on a given system.
+    /// `address` must be aligned to 4 bytes else a panic will occur during execution.
     #[cfg(feature = "ext-csr")]
     pub fn new(address: R::Unsigned, hart: R::Unsigned) -> Self {
         Self {
@@ -200,13 +200,13 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
                 Ok(self.step())
             },
             // SLT
-            (0b0110011, 0b010, _) => {
+            (0b0110011, 0b010, 0b0000000) => {
                 let variant::R { destination, source1, source2 } = Variant::decode(instruction);
                 self.set(destination, if self.get(source1).lt_signed(self.get(source2)) { R::zero_extended_byte(1) } else { R::zero_extended_byte(0) });
                 Ok(self.step())
             },
             // SLTU
-            (0b0110011, 0b011, _) => {
+            (0b0110011, 0b011, 0b0000000) => {
                 let variant::R { destination, source1, source2 } = Variant::decode(instruction);
                 self.set(destination, if self.get(source1).lt_unsigned(self.get(source2)) { R::zero_extended_byte(1) } else { R::zero_extended_byte(0) });
                 Ok(self.step())
@@ -511,6 +511,57 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
                 Ok(if self.get(source1).gte_unsigned(self.get(source2)) { self.pc = self.pc.add_signed(immediate) } else { self.step() })
             },
 
+            // M Extension
+            // MUL
+            #[cfg(feature = "ext-m")]
+            (0b0110011, 0b000, 0b0000001) => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                Ok(self.set(destination, self.get(source1).mul(self.get(source2))))
+            },
+            // MULH
+            #[cfg(feature = "ext-m")]
+            (0b0110011, 0b001, 0b0000001) => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                Ok(self.set(destination, self.get(source1).mulh(self.get(source2))))
+            },
+            // MULHSU
+            #[cfg(feature = "ext-m")]
+            (0b0110011, 0b010, 0b0000001) => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                Ok(self.set(destination, self.get(source1).mulhsu(self.get(source2))))
+            },
+            // MULHU
+            #[cfg(feature = "ext-m")]
+            (0b0110011, 0b011, 0b0000001) => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                Ok(self.set(destination, self.get(source1).mulhu(self.get(source2))))
+            },
+            // DIV
+            #[cfg(feature = "ext-m")]
+            (0b0110011, 0b100, 0b0000001) => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                Ok(self.set(destination, self.get(source1).div(self.get(source2))))
+            },
+            // DIVU
+            #[cfg(feature = "ext-m")]
+            (0b0110011, 0b101, 0b0000001) => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                Ok(self.set(destination, self.get(source1).divu(self.get(source2))))
+            },
+            // DIVU
+            #[cfg(feature = "ext-m")]
+            (0b0110011, 0b110, 0b0000001) => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                Ok(self.set(destination, self.get(source1).rem(self.get(source2))))
+            },
+            // REMU
+            #[cfg(feature = "ext-m")]
+            (0b0110011, 0b111, 0b0000001) => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                Ok(self.set(destination, self.get(source1).remu(self.get(source2))))
+            },
+
+            // Zicsr Extension
             // CSRRW
             #[cfg(feature = "ext-csr")]
             (0b1110011, 0b001, _) => {
@@ -593,8 +644,8 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
     }
 }
 
-/// A Memory Management Unit (MMU) handles memory accesses on the system
-/// Devices and memory regions other than working memory (ie. RAM) may be mapped by way of the MMU
+/// A Memory Management Unit (MMU) handles memory accesses on the system.
+/// Devices and memory regions other than working memory (ie. RAM) may be mapped by way of the MMU.
 pub trait Mmu<R: Register> {
     /// Get the byte at the given address
     fn get(&self, address: R::Unsigned) -> u8;

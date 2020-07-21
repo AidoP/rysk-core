@@ -1,3 +1,108 @@
+/// An integer which may be multiplied in the way specified by the ISA
+/// A seperate trait is used as implementation in a macro is too difficult
+pub trait Multiply<U>: Sized {
+    /// Returns the saturating multiplication of two integers
+    fn mul(self, other: Self) -> Self;
+    /// Returns the upper, overflowed bits, of an integer multiplication
+    fn mulh(self, other: Self) -> Self;
+    /// Returns the upper, overflowed bits, of an integer multiplication where the second integer is unsigned
+    fn mulhu(self, other: U) -> Self;
+    /// Multiply two integers, returning both the high, overflowed, bits and the lower bits.
+    /// An optimisation for fused multiplies.
+    fn mulhl(self, other: Self) -> (Self, Self);
+}
+impl Multiply<Self> for u32 {
+    fn mul(self, other: Self) -> Self {
+        self.saturating_mul(other)
+    }
+    fn mulh(self, other: Self) -> Self {
+        ((self as u64).saturating_mul(other as _) >> 4) as u32
+    }
+    #[inline(always)]
+    fn mulhu(self, other: Self) -> Self {
+        self.mulh(other)
+    }
+    fn mulhl(self, other: Self) -> (Self, Self) {
+        let result = (self as u64).saturating_mul(other as _);
+        (result as u32, (result >> 4) as u32)
+    }
+}
+impl Multiply<u32> for i32 {
+    fn mul(self, other: Self) -> Self {
+        (self as u32).saturating_mul(other as u32) as i32
+    }
+    fn mulh(self, other: Self) -> Self {
+        ((self as i64).saturating_mul(other as _) >> 4) as i32
+    }
+    fn mulhu(self, other: u32) -> Self {
+        ((self as i64).saturating_mul(other as i64) >> 4) as i32
+    }
+    fn mulhl(self, other: Self) -> (Self, Self) {
+        let result = (self as i64).saturating_mul(other as _);
+        (result as i32, (result >> 4) as i32)
+    }
+}
+impl Multiply<Self> for u64 {
+    fn mul(self, other: Self) -> Self {
+        self.saturating_mul(other)
+    }
+    fn mulh(self, other: Self) -> Self {
+        ((self as u128).saturating_mul(other as _) >> 8) as u64
+    }
+    #[inline(always)]
+    fn mulhu(self, other: Self) -> Self {
+        self.mulh(other)
+    }
+    fn mulhl(self, other: Self) -> (Self, Self) {
+        let result = (self as u128).saturating_mul(other as _);
+        (result as u64, (result >> 8) as u64)
+    }
+}
+impl Multiply<u64> for i64 {
+    fn mul(self, other: Self) -> Self {
+        (self as u64).saturating_mul(other as u64) as i64
+    }
+    fn mulh(self, other: Self) -> Self {
+        ((self as i128).saturating_mul(other as _) >> 8) as i64
+    }
+    fn mulhu(self, other: u64) -> Self {
+        ((self as i128).saturating_mul(other as i128) >> 4) as i64
+    }
+    fn mulhl(self, other: Self) -> (Self, Self) {
+        let result = (self as i128).saturating_mul(other as _);
+        (result as i64, (result >> 8) as i64)
+    }
+}
+impl Multiply<Self> for usize {
+    fn mul(self, other: Self) -> Self {
+        self.saturating_mul(other)
+    }
+    fn mulh(self, _: Self) -> Self {
+        unimplemented!()
+    }
+    #[inline(always)]
+    fn mulhu(self, other: Self) -> Self {
+        self.mulh(other)
+    }
+    fn mulhl(self, _: Self) -> (Self, Self) {
+        unimplemented!()
+    }
+}
+impl Multiply<usize> for isize {
+    fn mul(self, other: Self) -> Self {
+        self.saturating_mul(other)
+    }
+    fn mulh(self, _: Self) -> Self {
+        unimplemented!()
+    }
+    fn mulhu(self, _: usize) -> Self {
+        unimplemented!()
+    }
+    fn mulhl(self, _: Self) -> (Self, Self) {
+        unimplemented!()
+    }
+}
+
 /// An integer type which can apply operations as specified by the ISA
 /// No panic shall occur from any method
 pub trait Integer {
@@ -5,6 +110,9 @@ pub trait Integer {
     fn sub(self, other: Self) -> Self;
     fn shl(self, other: Self) -> Self;
     fn shr(self, other: Self) -> Self;
+
+    fn div(self, other: Self) -> Self;
+    fn rem(self, other: Self) -> Self;
 
     fn lt(self, other: Self) -> bool;
     fn gte(self, other: Self) -> bool;
@@ -17,7 +125,7 @@ pub trait Integer {
     fn not(self) -> Self;
 }
 macro_rules! impl_integer {
-    ($($name:ident),*) => {
+    ($($name:ident(* = $shift:expr, $larger_type:ident)),*) => {
         $(
             impl Integer for $name {
                 #[inline(always)]
@@ -28,7 +136,12 @@ macro_rules! impl_integer {
                 fn shl(self, other: Self) -> Self { $name::wrapping_shl(self, other as _) }
                 #[inline(always)]
                 fn shr(self, other: Self) -> Self { $name::wrapping_shr(self, other as _) }
-            
+
+                #[inline(always)]
+                fn div(self, other: Self) -> Self { self / other }
+                #[inline(always)]
+                fn rem(self, other: Self) -> Self { self % other }
+
                 #[inline(always)]
                 fn lt(self, other: Self) -> bool { self < other }
                 #[inline(always)]
@@ -50,7 +163,7 @@ macro_rules! impl_integer {
         )*
     };
 }
-impl_integer! { u32, i32, u64, i64, u128, i128, usize, isize }
+impl_integer! { u32(* = 4, u64), i32(* = 4, i64), u64(* = 8, u128), i64(* = 4, u128), usize(* = 8, usize), isize(* = 8, usize) }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RegisterWidth {
@@ -62,9 +175,9 @@ pub enum RegisterWidth {
 /// Byte order independent interpretations for a register
 pub trait Xlen {
     /// The concrete signed type that the inner value represents
-    type Signed: Integer + Copy;
+    type Signed: Integer + Multiply<Self::Unsigned> + Copy;
     /// The concrete unsigned type that the inner value represents
-    type Unsigned: Integer + Copy;
+    type Unsigned: Integer + Multiply<Self::Unsigned> + Copy;
     /// The width of the register. Defines the available instruction set (ie. RV32I, RV64I or RV128I)
     const WIDTH: RegisterWidth;
 
@@ -110,6 +223,39 @@ pub trait Register: Xlen + Sized + Default + Copy {
     /// Arithmetic shift right by a certain number of bits; shift right, preserving the sign
     fn sha(self, other: Self) -> Self {
         Self::from_signed(self.signed().shr(other.signed()))
+    }
+
+    #[cfg(feature = "ext-m")]
+    fn mul(self, other: Self) -> Self {
+        Self::from_signed(self.signed().mul(other.signed()))
+    }
+    #[cfg(feature = "ext-m")]
+    fn mulh(self, other: Self) -> Self {
+        Self::from_signed(self.signed().mulh(other.signed()))
+    }
+    #[cfg(feature = "ext-m")]
+    fn mulhu(self, other: Self) -> Self {
+        Self::from_unsigned(self.unsigned().mulh(other.unsigned()))
+    }
+    #[cfg(feature = "ext-m")]
+    fn mulhsu(self, other: Self) -> Self {
+        Self::from_signed(self.signed().mulhu(other.unsigned()))
+    }
+    #[cfg(feature = "ext-m")]
+    fn div(self, other: Self) -> Self {
+        Self::from_signed(self.signed().div(other.signed()))
+    }
+    #[cfg(feature = "ext-m")]
+    fn divu(self, other: Self) -> Self {
+        Self::from_unsigned(self.unsigned().div(other.unsigned()))
+    }
+    #[cfg(feature = "ext-m")]
+    fn rem(self, other: Self) -> Self {
+        Self::from_signed(self.signed().rem(other.signed()))
+    }
+    #[cfg(feature = "ext-m")]
+    fn remu(self, other: Self) -> Self {
+        Self::from_unsigned(self.unsigned().rem(other.unsigned()))
     }
 
     /// Applies the bitwise AND operation to self and other

@@ -24,7 +24,7 @@ fn source2(instruction: [u8; 4]) -> usize {
     (((instruction[2] & 0xF0) >> 4) | ((instruction[3] & 0x01) << 4)) as _
 }
 
-/// The R instruction type, encoding a destination and 2 source registers
+/// The R instruction type, encoding a destination and 2 source registers.
 pub struct R {
     pub destination: usize,
     pub source1: usize,
@@ -40,8 +40,8 @@ impl Variant for R {
     }
 }
 
-/// The I instruction type, encoding a destination and source register as well as an immediate value
-/// The immediate value is a sign extended 12-bit integer
+/// The I instruction type, encoding a destination and source register as well as an immediate value.
+/// The immediate value is a sign extended 12-bit integer.
 pub struct I<R: Register> {
     pub destination: usize,
     pub source: usize,
@@ -58,7 +58,7 @@ impl<R: Register> Variant for I<R> {
     }
 }
 
-/// A variation of the I type where the immediate encodes a 12-bit unsigned integer index
+/// A variation of the I type where the immediate encodes a 12-bit unsigned integer index.
 pub struct C {
     pub destination: usize,
     pub source: usize,
@@ -74,7 +74,7 @@ impl Variant for C {
     }
 }
 
-/// The S instruction type, encoding 2 source registers and a 12-bit sign extended immediate value
+/// The S instruction type, encoding 2 source registers and a 12-bit sign extended immediate value.
 pub struct S<R: Register> {
     pub source1: usize,
     pub source2: usize,
@@ -91,8 +91,8 @@ impl<R: Register> Variant for S<R> {
     }
 }
 
-/// A variation of the S type where the immediate is a 13-bit branch offset
-/// The branch offset's least significant bit is not set as it must always be aligned, thereby allowing for larger offsets
+/// A variation of the S type where the immediate is a 13-bit branch offset.
+/// The branch offset's least significant bit is not set as it must always be aligned, thereby allowing for larger offsets.
 pub struct B<R: Register> {
     pub source1: usize,
     pub source2: usize,
@@ -112,7 +112,7 @@ impl<R: Register> Variant for B<R> {
     }
 }
 
-/// The U instruction variant, encoding a destination and a 32-bit immediate value with the lower 12 bits zeroed
+/// The U instruction variant, encoding a destination and a 32-bit immediate value with the lower 12 bits zeroed.
 pub struct U<R: Register> {
     pub destination: usize,
     pub immediate: R
@@ -126,8 +126,8 @@ impl<R: Register> Variant for U<R> {
     }
 }
 
-/// A variation of the U instruction type where the immediate encodes a 21-bit jump offset
-/// The least significant bit of the offset is zeroed as it must be aligned, thereby allowing a greater offset range
+/// A variation of the U instruction type where the immediate encodes a 21-bit jump offset.
+/// The least significant bit of the offset is zeroed as it must be aligned, thereby allowing a greater offset range.
 pub struct J<R: Register> {
     pub destination: usize,
     pub immediate: R

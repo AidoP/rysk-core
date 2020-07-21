@@ -12,7 +12,7 @@ categories = ["emulators"]
 keywords = ["riscv", "RISC-V", "virtualisation"]
 
 [features]
-default = ["ext-csr"]
+default = ["ext-csr", "ext-m"]
 ext-csr = []
 ext-m = []
 

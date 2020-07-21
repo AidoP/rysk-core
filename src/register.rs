@@ -73,9 +73,25 @@ macro_rules! impl_integer {
                 fn shr(self, other: Self) -> Self { $name::wrapping_shr(self, other as _) }
 
                 #[inline(always)]
-                fn div(self, other: Self) -> Self { self / other }
+                fn div(self, other: Self) -> Self {
+                    if other == 0 {
+                        -1 as _
+                    } else if self == std::$name::MIN && other == -1 as _ {
+                        self
+                    } else {
+                        self / other
+                    }
+                }
                 #[inline(always)]
-                fn rem(self, other: Self) -> Self { self % other }
+                fn rem(self, other: Self) -> Self {
+                    if other == 0 {
+                        self
+                    } else if self == std::$name::MIN && other == -1 as _ {
+                        0
+                    } else {
+                        self % other
+                    }
+                }
 
                 #[inline(always)]
                 fn lt(self, other: Self) -> bool { self < other }

@@ -88,7 +88,6 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
                     match R::WIDTH {
                         RegisterWidth::Bits32 => R::zero_extended_word([isa0, isa1, isa2, isa3 | MXLEN32 << 6]),
                         RegisterWidth::Bits64 => R::zero_extended_double([isa0, isa1, isa2, isa3, 0, 0, 0, MXLEN64 << 6]),
-                        RegisterWidth::Bits128 => unimplemented!(),
                     }
                 )
             },

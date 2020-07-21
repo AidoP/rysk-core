@@ -1,107 +1,41 @@
 /// An integer which may be multiplied in the way specified by the ISA
 /// A seperate trait is used as implementation in a macro is too difficult
-pub trait Multiply<U>: Sized {
-    /// Returns the saturating multiplication of two integers
-    fn mul(self, other: Self) -> Self;
-    /// Returns the upper, overflowed bits, of an integer multiplication
-    fn mulh(self, other: Self) -> Self;
-    /// Returns the upper, overflowed bits, of an integer multiplication where the second integer is unsigned
-    fn mulhu(self, other: U) -> Self;
-    /// Multiply two integers, returning both the high, overflowed, bits and the lower bits.
-    /// An optimisation for fused multiplies.
-    fn mulhl(self, other: Self) -> (Self, Self);
+pub trait Multiply<S, U>: Sized {
+    /// Multiply two signed integers, returning both the high, overflowed, bits and the lower bits.
+    fn muls(first: S, second: S) -> (S, S);
+    /// Multiply two unsigned integers, returning both the high, overflowed, bits and the lower bits.
+    fn mulu(first: U, second: U) -> (U, U);
+    /// Multiply a signed integer by an unsigned integer, returning both the high, overflowed, bits and the lower bits.
+    fn mulsu(first: S, second: U) -> (S, S);
 }
-impl Multiply<Self> for u32 {
-    fn mul(self, other: Self) -> Self {
-        self.saturating_mul(other)
-    }
-    fn mulh(self, other: Self) -> Self {
-        ((self as u64).saturating_mul(other as _) >> 4) as u32
-    }
-    #[inline(always)]
-    fn mulhu(self, other: Self) -> Self {
-        self.mulh(other)
-    }
-    fn mulhl(self, other: Self) -> (Self, Self) {
-        let result = (self as u64).saturating_mul(other as _);
-        (result as u32, (result >> 4) as u32)
-    }
+
+macro_rules! impl_multiply {
+    ($(($signed:ident, $unsigned:ident, * = $bytes:expr) -> ($signed_long:ident, $unsigned_long:ident)),*) => {
+        $(
+            impl Multiply<$signed, $unsigned> for $signed {
+                fn muls(first: $signed, second: $signed) -> ($signed, $signed) {
+                    let result = (first as $signed_long).saturating_mul(second as _);
+                    (result as _, (result >> ($bytes * 8)) as _)
+                }
+                fn mulu(first: $unsigned, second: $unsigned) -> ($unsigned, $unsigned) {
+                    let result = (first as $unsigned_long).saturating_mul(second as _);
+                    (result as _, (result >> ($bytes * 8)) as _)
+                }
+                fn mulsu(first: $signed, second: $unsigned) -> ($signed, $signed) {
+                    let result = (first as $signed_long).saturating_mul(second as _);
+                    (result as _, (result >> ($bytes * 8)) as _)
+                }
+            }
+        )*
+    };
 }
-impl Multiply<u32> for i32 {
-    fn mul(self, other: Self) -> Self {
-        (self as u32).saturating_mul(other as u32) as i32
-    }
-    fn mulh(self, other: Self) -> Self {
-        ((self as i64).saturating_mul(other as _) >> 4) as i32
-    }
-    fn mulhu(self, other: u32) -> Self {
-        ((self as i64).saturating_mul(other as i64) >> 4) as i32
-    }
-    fn mulhl(self, other: Self) -> (Self, Self) {
-        let result = (self as i64).saturating_mul(other as _);
-        (result as i32, (result >> 4) as i32)
-    }
-}
-impl Multiply<Self> for u64 {
-    fn mul(self, other: Self) -> Self {
-        self.saturating_mul(other)
-    }
-    fn mulh(self, other: Self) -> Self {
-        ((self as u128).saturating_mul(other as _) >> 8) as u64
-    }
-    #[inline(always)]
-    fn mulhu(self, other: Self) -> Self {
-        self.mulh(other)
-    }
-    fn mulhl(self, other: Self) -> (Self, Self) {
-        let result = (self as u128).saturating_mul(other as _);
-        (result as u64, (result >> 8) as u64)
-    }
-}
-impl Multiply<u64> for i64 {
-    fn mul(self, other: Self) -> Self {
-        (self as u64).saturating_mul(other as u64) as i64
-    }
-    fn mulh(self, other: Self) -> Self {
-        ((self as i128).saturating_mul(other as _) >> 8) as i64
-    }
-    fn mulhu(self, other: u64) -> Self {
-        ((self as i128).saturating_mul(other as i128) >> 4) as i64
-    }
-    fn mulhl(self, other: Self) -> (Self, Self) {
-        let result = (self as i128).saturating_mul(other as _);
-        (result as i64, (result >> 8) as i64)
-    }
-}
-impl Multiply<Self> for usize {
-    fn mul(self, other: Self) -> Self {
-        self.saturating_mul(other)
-    }
-    fn mulh(self, _: Self) -> Self {
-        unimplemented!()
-    }
-    #[inline(always)]
-    fn mulhu(self, other: Self) -> Self {
-        self.mulh(other)
-    }
-    fn mulhl(self, _: Self) -> (Self, Self) {
-        unimplemented!()
-    }
-}
-impl Multiply<usize> for isize {
-    fn mul(self, other: Self) -> Self {
-        self.saturating_mul(other)
-    }
-    fn mulh(self, _: Self) -> Self {
-        unimplemented!()
-    }
-    fn mulhu(self, _: usize) -> Self {
-        unimplemented!()
-    }
-    fn mulhl(self, _: Self) -> (Self, Self) {
-        unimplemented!()
-    }
-}
+
+impl_multiply!{(i32, u32, * = 4) -> (i64, u64), (i64, u64, * = 8) -> (i128, u128)}
+
+#[cfg(target_pointer_width = "32")]
+impl_multiply!{(isize, usize, * = 4) -> (i64, u64)}
+#[cfg(target_pointer_width = "64")]
+impl_multiply!{(isize, usize, * = 8) -> (i128, u128)}
 
 /// An integer type which can apply operations as specified by the ISA
 /// No panic shall occur from any method
@@ -127,6 +61,7 @@ pub trait Integer {
 macro_rules! impl_integer {
     ($($name:ident(* = $shift:expr, $larger_type:ident)),*) => {
         $(
+            /// A trait needs to be implemented on something, so currently just usign the unsigned type
             impl Integer for $name {
                 #[inline(always)]
                 fn add(self, other: Self) -> Self { $name::wrapping_add(self, other) }
@@ -168,16 +103,15 @@ impl_integer! { u32(* = 4, u64), i32(* = 4, i64), u64(* = 8, u128), i64(* = 4, u
 #[derive(Debug, PartialEq, Eq)]
 pub enum RegisterWidth {
     Bits32,
-    Bits64,
-    Bits128
+    Bits64
 }
 
 /// Byte order independent interpretations for a register
 pub trait Xlen {
     /// The concrete signed type that the inner value represents
-    type Signed: Integer + Multiply<Self::Unsigned> + Copy;
+    type Signed: Integer + Multiply<Self::Signed, Self::Unsigned> + Copy;
     /// The concrete unsigned type that the inner value represents
-    type Unsigned: Integer + Multiply<Self::Unsigned> + Copy;
+    type Unsigned: Integer + Copy;
     /// The width of the register. Defines the available instruction set (ie. RV32I, RV64I or RV128I)
     const WIDTH: RegisterWidth;
 
@@ -227,19 +161,19 @@ pub trait Register: Xlen + Sized + Default + Copy {
 
     #[cfg(feature = "ext-m")]
     fn mul(self, other: Self) -> Self {
-        Self::from_signed(self.signed().mul(other.signed()))
+        Self::from_signed(Self::Signed::muls(self.signed(), other.signed()).0)
     }
     #[cfg(feature = "ext-m")]
     fn mulh(self, other: Self) -> Self {
-        Self::from_signed(self.signed().mulh(other.signed()))
+        Self::from_signed(Self::Signed::muls(self.signed(), other.signed()).1)
     }
     #[cfg(feature = "ext-m")]
     fn mulhu(self, other: Self) -> Self {
-        Self::from_unsigned(self.unsigned().mulh(other.unsigned()))
+        Self::from_unsigned(Self::Signed::mulu(self.unsigned(), other.unsigned()).1)
     }
     #[cfg(feature = "ext-m")]
     fn mulhsu(self, other: Self) -> Self {
-        Self::from_signed(self.signed().mulhu(other.unsigned()))
+        Self::from_signed(Self::Signed::mulsu(self.signed(), other.unsigned()).1)
     }
     #[cfg(feature = "ext-m")]
     fn div(self, other: Self) -> Self {
@@ -328,7 +262,7 @@ pub trait Register: Xlen + Sized + Default + Copy {
 }
 
 /// A 32-bit value with byte-order and sign independent operations
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Register32(pub [u8; 4]);
 impl Xlen for Register32 {
     type Signed = i32;
@@ -401,6 +335,16 @@ impl Register for Register32 {
 impl Default for Register32 {
     fn default() -> Self {
         Self([0, 0, 0, 0])
+    }
+}
+impl From<u32> for Register32 {
+    fn from(value: u32) -> Self {
+        Self::from_unsigned(value)
+    }
+}
+impl From<i32> for Register32 {
+    fn from(value: i32) -> Self {
+        Self::from_signed(value)
     }
 }
 
@@ -502,8 +446,6 @@ impl Xlen for RegisterSize {
     const WIDTH: RegisterWidth = RegisterWidth::Bits32;
     #[cfg(target_pointer_width = "64")]
     const WIDTH: RegisterWidth = RegisterWidth::Bits64;
-    #[cfg(target_pointer_width = "128")]
-    const WIDTH: RegisterWidth = RegisterWidth::Bits128;
 
     fn signed(self) -> isize {
         isize::from_le_bytes(self.0)
@@ -533,8 +475,6 @@ impl Register for RegisterSize {
         {Self([byte, extended, extended, extended])}
         #[cfg(target_pointer_width = "64")]
         {Self([byte, extended, extended, extended, extended, extended, extended, extended])}
-        #[cfg(target_pointer_width = "128")]
-        {Self([byte, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended])}
     }
     #[inline]
     fn zero_extended_byte(byte: u8) -> Self {
@@ -542,8 +482,6 @@ impl Register for RegisterSize {
         {Self([byte, 0, 0, 0])}
         #[cfg(target_pointer_width = "64")]
         {Self([byte, 0, 0, 0, 0, 0, 0, 0])}
-        #[cfg(target_pointer_width = "128")]
-        {Self([byte, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])}
     }
     #[inline]
     fn sign_extended_half(half: [u8; 2]) -> Self {
@@ -552,8 +490,6 @@ impl Register for RegisterSize {
         {Self([half[0], half[1], extended, extended])}
         #[cfg(target_pointer_width = "64")]
         {Self([half[0], half[1], extended, extended, extended, extended, extended, extended])}
-        #[cfg(target_pointer_width = "128")]
-        {Self([half[0], half[1], extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended])}
     }
     #[inline]
     fn zero_extended_half(half: [u8; 2]) -> Self {
@@ -561,8 +497,6 @@ impl Register for RegisterSize {
         {Self([half[0], half[1], 0, 0])}
         #[cfg(target_pointer_width = "64")]
         {Self([half[0], half[1], 0, 0, 0, 0, 0, 0])}
-        #[cfg(target_pointer_width = "128")]
-        {Self([half[0], half[1], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])}
     }
     #[inline(always)]
     fn sign_extended_word(word: [u8; 4]) -> Self {
@@ -571,8 +505,6 @@ impl Register for RegisterSize {
         {Self(word)}
         #[cfg(target_pointer_width = "64")]
         {Self([word[0], word[1], word[2], word[3], extended, extended, extended, extended])}
-        #[cfg(target_pointer_width = "128")]
-        {Self([word[0], word[1], word[2], word[3], extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended, extended])}
     }
     #[inline(always)]
     fn zero_extended_word(word: [u8; 4]) -> Self {
@@ -580,8 +512,6 @@ impl Register for RegisterSize {
         {Self(word)}
         #[cfg(target_pointer_width = "64")]
         {Self([word[0], word[1], word[2], word[3], 0, 0, 0, 0])}
-        #[cfg(target_pointer_width = "128")]
-        {Self([word[0], word[1], word[2], word[3], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])}
     }
     #[inline(always)]
     fn sign_extended_double(double: [u8; 8]) -> Self {
@@ -589,8 +519,6 @@ impl Register for RegisterSize {
         {panic!("Cannot create a 32 bit register from a 64 bit value")}
         #[cfg(target_pointer_width = "64")]
         {Self(double)}
-        #[cfg(target_pointer_width = "128")]
-        {Self([double[0], double[1], double[2], double[3], double[4], double[5], double[6], double[7], extended, extended, extended, extended, extended, extended, extended, extended])}
     }
     #[inline(always)]
     fn zero_extended_double(double: [u8; 8]) -> Self {
@@ -598,8 +526,6 @@ impl Register for RegisterSize {
         {panic!("Cannot create a 32 bit register from a 64 bit value")}
         #[cfg(target_pointer_width = "64")]
         {Self(double)}
-        #[cfg(target_pointer_width = "128")]
-        {Self([double[0], double[1], double[2], double[3], double[4], double[5], double[6], double[7], 0, 0, 0, 0, 0, 0, 0, 0])}
     }
 
     #[inline(always)]
@@ -623,7 +549,5 @@ impl Default for RegisterSize {
         {Self([0, 0, 0, 0])}
         #[cfg(target_pointer_width = "64")]
         {Self([0, 0, 0, 0, 0, 0, 0, 0])}
-        #[cfg(target_pointer_width = "128")]
-        {Self([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])}
     }
 }

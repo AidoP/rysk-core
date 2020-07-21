@@ -51,18 +51,17 @@ Future Goals
 | RV32I         | Partial |
 | RV32E         | None*   |
 | RV64I         | Full    |
-| RV128I        | None    |
+| RV128I        | TBA     |
 | *Zifencei*    | None    |
 | *Zicsr*       | Partial |
 | N             | None    |
-| M             | None    |
+| M             | Partial |
 | A             | None    |
 | F             | None    |
 | D             | None    |
 | Q             | None    |
 | C             | None    |
 | G             | Partial |
-| LBJTPV        | N/A     |
 | *Zam*         | N/A     |
 | *Ztso*        | Always  |
 

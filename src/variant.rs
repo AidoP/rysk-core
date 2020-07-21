@@ -2,6 +2,8 @@ use crate::register::Register;
 
 /// Decode an instruction encoding variant into its significant parts
 /// ```rust
+/// use rysk_core::variant::{ self, Variant };
+/// let instruction = [0x13, 0, 0, 0];
 /// let variant::R { destination, source1, source2 } = Variant::decode(instruction);
 /// ```
 pub trait Variant {

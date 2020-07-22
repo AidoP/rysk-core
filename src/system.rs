@@ -535,6 +535,12 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
                 let variant::R { destination, source1, source2 } = Variant::decode(instruction);
                 Ok(self.set(destination, self.get(source1).mulhu(self.get(source2))))
             },
+            // MULW
+            #[cfg(feature = "ext-m")]
+            (0b0111011, 0b000, 0b0000001) if R::WIDTH == RegisterWidth::Bits64 => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                Ok(self.set(destination, R::sign_extended_word(Register32(self.get(source1).word()).mul(Register32(self.get(source2).word())).word())))
+            },
             // DIV
             #[cfg(feature = "ext-m")]
             (0b0110011, 0b100, 0b0000001) => {
@@ -547,7 +553,19 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
                 let variant::R { destination, source1, source2 } = Variant::decode(instruction);
                 Ok(self.set(destination, self.get(source1).divu(self.get(source2))))
             },
-            // DIVU
+            // DIVW
+            #[cfg(feature = "ext-m")]
+            (0b0111011, 0b100, 0b0000001) => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                Ok(self.set(destination, R::sign_extended_word(Register32(self.get(source1).word()).div(Register32(self.get(source2).word())).word())))
+            },
+            // DIVUW
+            #[cfg(feature = "ext-m")]
+            (0b0111011, 0b101, 0b0000001) => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                Ok(self.set(destination, R::sign_extended_word(Register32(self.get(source1).word()).divu(Register32(self.get(source2).word())).word())))
+            },
+            // REM
             #[cfg(feature = "ext-m")]
             (0b0110011, 0b110, 0b0000001) => {
                 let variant::R { destination, source1, source2 } = Variant::decode(instruction);
@@ -558,6 +576,18 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             (0b0110011, 0b111, 0b0000001) => {
                 let variant::R { destination, source1, source2 } = Variant::decode(instruction);
                 Ok(self.set(destination, self.get(source1).remu(self.get(source2))))
+            },
+            // REMW
+            #[cfg(feature = "ext-m")]
+            (0b0111011, 0b110, 0b0000001) => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                Ok(self.set(destination, R::sign_extended_word(Register32(self.get(source1).word()).rem(Register32(self.get(source2).word())).word())))
+            },
+            // REMUW
+            #[cfg(feature = "ext-m")]
+            (0b0111011, 0b111, 0b0000001) => {
+                let variant::R { destination, source1, source2 } = Variant::decode(instruction);
+                Ok(self.set(destination, R::sign_extended_word(Register32(self.get(source1).word()).remu(Register32(self.get(source2).word())).word())))
             },
 
             // Zicsr Extension

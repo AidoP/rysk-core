@@ -9,7 +9,7 @@ RISCV decoding and execution primitives. All you need to implement your own virt
 If you are looking for a working virtual machine you want [Rysk](https://gitlab.com/AidoP1/rysk). This is a library for building RISCV virtual machines.
 
 # Usage
-Please not that `0.0` versions do not guarantee a stable ABI. Anything may change at any time during early development.
+Please note that `0.0` versions do not guarantee a stable ABI. Anything may change at any time during early development.
 
 First, add a dependency to your `Cargo.toml`:
 ```toml
@@ -49,7 +49,7 @@ Future Goals
 
 > Note: This list does not account for errors and/or bugs in the implementation. Perfect compliance is not guaranteed
 > 
-> If an instruction does not behave as specified please leave an issue
+> If an instruction does not behave as specified in the ISA, please leave an issue
 
 |   Extension   | Support |
 | :-----------: | :-----: |

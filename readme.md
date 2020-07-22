@@ -1,4 +1,4 @@
-# Rysk Core
+# Rysk Core [![crates.io](https://img.shields.io/crates/v/rysk-core?style=flat-square)](http://crates.io/crates/rysk-core) [![license](https://img.shields.io/crates/l/rysk-core?style=flat-square)](https://gitlab.com/AidoP1/rysk-core/-/blob/master/LICENSE)
 RISCV decoding and execution primitives. All you need to implement your own virtual RISCV machine.
 
 ## [Virtual Machine](https://gitlab.com/AidoP1/rysk)

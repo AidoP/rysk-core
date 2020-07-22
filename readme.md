@@ -5,10 +5,12 @@ RISCV decoding and execution primitives. All you need to implement your own virt
 If you are looking for a working virtual machine you want [Rysk](https://gitlab.com/AidoP1/rysk). This is a library for building RISCV virtual machines.
 
 # Usage
+Please not that `0.0` versions do not guarantee a stable ABI. Anything may change at any time during early development.
+
 First, add a dependency to your `Cargo.toml`:
 ```toml
     [dependencies]
-    rysk-core = "0.0.2"
+    rysk-core = "0.0.3"
 ```
 
 Then in your project,
@@ -37,8 +39,7 @@ Current Goals
 
 Future Goals
 - [ ] Performance
-- [ ] Support for all base extensions
-- [ ] Debugging tools
+- [ ] Support for all well defined base extensions
 
 # Compliance
 
@@ -55,7 +56,7 @@ Future Goals
 | *Zifencei*    | None    |
 | *Zicsr*       | Partial |
 | N             | None    |
-| M             | Partial |
+| M             | Full    |
 | A             | None    |
 | F             | None    |
 | D             | None    |
@@ -82,4 +83,4 @@ Most extensions are enabled through cargo features.
 | *Zicsr*   | **default** |
 | *Zicsr*   | ext-csr     |
 
-The base extension (RV32I, RV64I or RV128I) is set through the generic register type used. `MXLEN` is a set at compile time and therefore cannot be changed by RISCV programs (ie. `misa[MXLEN]` is read-only).
+The base extension (RV32I, RV64I) is set through the generic register type used. `MXLEN` is a set at compile time and therefore cannot be changed by RISCV programs (ie. `misa[MXLEN]` is read-only).

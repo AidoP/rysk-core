@@ -17,7 +17,7 @@ pub use register::{ Register, Register32, Register64, RegisterSize };
 pub mod csr;
 
 pub mod version {
-    pub const PATCH: u8 = 2;
+    pub const PATCH: u8 = 3;
     pub const MINOR: u8 = 0;
     pub const MAJOR: u8 = 0;
 }

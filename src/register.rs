@@ -39,7 +39,7 @@ impl_multiply!{(isize, usize, * = 8) -> (i128, u128)}
 
 /// An integer type which can apply operations as specified by the ISA
 /// No panic shall occur from any method
-pub trait Integer {
+pub trait Integer: Default {
     fn add(self, other: Self) -> Self;
     fn sub(self, other: Self) -> Self;
     fn shl(self, other: Self) -> Self;
@@ -145,6 +145,10 @@ pub trait Xlen {
     fn append(self, offset: usize) -> Self::Unsigned;
     /// Return the value as an unsigned system-native value
     fn usize(self) -> usize;
+
+    /// Sets the high bit to interrupt and the least significant byte to cause, as specified for the *cause CSR
+    #[cfg(feature = "ext-csr")]
+    fn trap_cause(cause: u8, interrupt: bool) -> Self;
 }
 
 /// Operations on a register carried out by system instructions
@@ -302,6 +306,10 @@ impl Xlen for Register32 {
     fn usize(self) -> usize {
         self.unsigned() as usize
     }
+    #[cfg(feature = "ext-csr")]
+    fn trap_cause(cause: u8, interrupt: bool) -> Self {
+        Self([if interrupt { 0x80 } else { 0 }, 0, 0, cause])
+    }
 }
 impl Register for Register32 {
     #[inline]
@@ -396,6 +404,10 @@ impl Xlen for Register64 {
     fn usize(self) -> usize {
         self.unsigned() as usize
     }
+    #[cfg(feature = "ext-csr")]
+    fn trap_cause(cause: u8, interrupt: bool) -> Self {
+        Self([if interrupt { 0x80 } else { 0 }, 0, 0, 0, 0, 0, 0, cause])
+    }
 }
 impl Register for Register64 {
     #[inline]
@@ -480,6 +492,14 @@ impl Xlen for RegisterSize {
     }
     fn usize(self) -> usize {
         self.unsigned()
+    }
+    #[cfg(feature = "ext-csr")]
+    fn trap_cause(cause: u8, interrupt: bool) -> Self {
+        let msb = if interrupt { 0x80 } else { 0 };
+        #[cfg(target_pointer_width = "32")]
+        { Self([msb, 0, 0, cause]) }
+        #[cfg(target_pointer_width = "64")]
+        { Self([msb, 0, 0, 0, 0, 0, 0, cause]) }
     }
 }
 #[cfg(not(target_pointer_width = "16"))]

@@ -1,19 +1,28 @@
-use crate::register::{Register,Register32,RegisterWidth};
-use crate::variant::{self,Variant};
+use crate::register::{ Register, Register32, RegisterWidth };
+use crate::variant::{ self, Variant };
 #[cfg(feature = "ext-csr")]
-use crate::{csr::Csr,register::Register64,version};
+use crate::{ csr::Csr, register::{Integer, Register64}, version };
 
-/// Defines a 
+/// Wraps a trap handler as traps are not handled internally without the csr-extension
 #[cfg(feature = "ext-csr")]
 macro_rules! trap {
-    (Illegal Instruction) => {
-        ()
+    (Instruction Address Misaligned; $core:expr) => {
+        // TODO: Shall be virtual address when implemented
+        $core.csr.mtval = $core.pc;
+        $core.trap(0, false);
+    };
+    (Illegal Instruction; $core:expr) => {
+        $core.trap(2, false);
     };
     (System Call) => {
-        ()
+        unimplemented!()
     };
-    (Breakpoint) => {
-        ()
+    (Breakpoint; $core:expr) => {
+        {
+            // TODO: Shall be virtual address when implemented
+            $core.csr.mtval = $core.pc;
+            $core.trap(3, false);
+        }
     };
 }
 #[cfg(feature = "ext-csr")]
@@ -22,13 +31,16 @@ type UnprivilegedTrap = ();
 
 #[cfg(not(feature = "ext-csr"))]
 macro_rules! trap {
-    (Illegal Instruction) => {
+    (Instruction Address Misaligned; $core:expr) => {
+        return Some(Trap::InstructionMisaligned);
+    };
+    (Illegal Instruction; $core:expr) => {
         return Some(Trap::IllegalInstruction);
     };
     (System Call) => {
         return Some(Trap::SystemCall);
     };
-    (Breakpoint) => {
+    (Breakpoint; $core:expr) => {
         return Some(Trap::Breakpoint);
     };
 }
@@ -191,6 +203,20 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
         }
     }
 
+    #[cfg(feature = "ext-csr")]
+    fn trap(&mut self, cause: u8, interrupt: bool) {
+        self.csr.mcause = R::trap_cause(cause, interrupt);
+        let base = self.csr.mtvec.and(R::sign_extended_byte(0xFC));
+        let address = if self.csr.mtvec.byte() & 1 == 1 {
+            // Address if vectored
+            base.add_unsigned(R::zero_extended_half(u16::to_le_bytes(4 * (cause as u16))))
+        } else {
+            // Address if direct
+            base
+        };
+        self.pc = address;
+    }
+
     /// Decode and execute an instruction
     #[allow(clippy::cognitive_complexity)]
     pub fn execute(&mut self, mmu: &mut dyn Mmu<R>) -> UnprivilegedTrap {
@@ -349,7 +375,7 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             (0b0011011, 0b001, _) if R::WIDTH != RegisterWidth::Bits32 => {
                 let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
                 if immediate.byte() & 0x20 != 0 {
-                    trap!(Illegal Instruction)
+                    trap!(Illegal Instruction; self)
                 } else {
                     self.set(destination, R::sign_extended_word(Register32(self.get(source).word()).shl(Register32(immediate.word()).and(Register32::zero_extended_byte(0x0E))).word()));
                     self.step()
@@ -365,7 +391,7 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             (0b0011011, 0b101, _) if instruction[3] & 0x40 == 0 && R::WIDTH != RegisterWidth::Bits32 => {
                 let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
                 if immediate.byte() & 0x20 != 0 {
-                    trap!(Illegal Instruction)
+                    trap!(Illegal Instruction; self)
                 } else {
                     self.set(destination, R::sign_extended_word(Register32(self.get(source).word()).shr(Register32(immediate.word()).and(Register32::zero_extended_byte(0x0E))).word()));
                     self.step()
@@ -381,7 +407,7 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             (0b0011011, 0b101, _) if instruction[3] & 0x40 != 0 && R::WIDTH != RegisterWidth::Bits32 => {
                 let variant::I::<R> { destination, source, immediate } = Variant::decode(instruction);
                 if immediate.byte() & 0x20 != 0 {
-                    trap!(Illegal Instruction)
+                    trap!(Illegal Instruction; self)
                 } else {
                     self.set(destination, R::sign_extended_word(Register32(self.get(source).word()).sha(Register32(immediate.word()).and(Register32::zero_extended_byte(0x0E))).word()));
                     self.step()
@@ -571,7 +597,7 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             },
             // EBREAK
             (0b1110011, 0b000, _) if instruction[2] & 0x10 != 0 => {
-                trap!(Breakpoint)
+                trap!(Breakpoint; self)
             },
 
             // M Extension
@@ -751,7 +777,7 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
                 }
                 self.step()
             },
-            _ => trap!(Illegal Instruction)
+            _ => trap!(Illegal Instruction; self)
         }
         #[cfg(not(feature = "ext-csr"))]
         None
@@ -780,6 +806,8 @@ pub trait Mmu<R: Register> {
 /// These are 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Trap {
+    /// The program counter was not aligned to a 4 byte boundary (2 for the C extension)
+    InstructionMisaligned,
     /// An illegal instruction was executed in unprivileged mode
     IllegalInstruction,
     /// A call to the execution environment
@@ -790,6 +818,7 @@ pub enum Trap {
 impl std::fmt::Debug for Trap {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::InstructionMisaligned => write!(f, "Instruction Address is Misaligned"),
             Self::IllegalInstruction => write!(f, "Trap on Illegal Instruction"),
             Self::SystemCall => write!(f, "System Call"),
             Self::Breakpoint => write!(f, "Trap on External Debugger Breakpoint")

@@ -1,7 +1,7 @@
 use crate::register::{ Register, Register32, RegisterWidth };
 use crate::variant::{ self, Variant };
 #[cfg(feature = "ext-csr")]
-use crate::{ csr::Csr, register::{Integer, Register64}, version };
+use crate::{ csr::Csr, register::Register64, version };
 
 /// Wraps a trap handler as traps are not handled internally without the csr-extension
 #[cfg(feature = "ext-csr")]
@@ -780,7 +780,7 @@ impl<R: Register + Default + Copy + Clone> Core<R> {
             _ => trap!(Illegal Instruction; self)
         }
         #[cfg(not(feature = "ext-csr"))]
-        None
+        trap!(Illegal Instruction; self)
     }
 }
 

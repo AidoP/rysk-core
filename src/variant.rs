@@ -30,12 +30,18 @@ macro_rules! source2 {
 }
 
 /// The R instruction type, encoding a destination and 2 source registers.
+#[derive(Debug, Eq, PartialEq)]
 pub struct R {
     pub destination: usize,
     pub source1: usize,
     pub source2: usize
 }
 impl Variant for R {
+    /// Decode the instruction to an R variant as specified in the ISA
+    /// ```rust
+    /// use rysk_core::variant::*;
+    /// assert_eq!(R { destination: 0, source1: 0, source2: 0 }, Variant::decode([0, 0, 0, 0]));
+    /// ```
     fn decode(instruction: [u8; 4]) -> Self {
         Self {
             destination: destination!(instruction),
@@ -47,6 +53,7 @@ impl Variant for R {
 
 /// The I instruction type, encoding a destination and source register as well as an immediate value.
 /// The immediate value is a sign extended 12-bit integer.
+#[derive(Debug, Eq, PartialEq)]
 pub struct I<R: Register> {
     pub destination: usize,
     pub source: usize,
@@ -64,6 +71,7 @@ impl<R: Register> Variant for I<R> {
 }
 
 /// A variation of the I type where the immediate encodes a 12-bit unsigned integer index.
+#[derive(Debug, Eq, PartialEq)]
 pub struct C {
     pub destination: usize,
     pub source: usize,
@@ -74,12 +82,13 @@ impl Variant for C {
         Self {
             destination: destination!(instruction),
             source: source1!(instruction),
-            csr: ((instruction[2] & 0xF0) >> 4) as usize | ((instruction[3] & 0x0F) << 4) as usize | ((instruction[3] & 0xF0) << 4) as usize
+            csr: ((instruction[2] & 0xF0) >> 4) as usize | ((instruction[3] & 0xFF) as usize) << 4
         }
     }
 }
 
 /// The S instruction type, encoding 2 source registers and a 12-bit sign extended immediate value.
+#[derive(Debug, Eq, PartialEq)]
 pub struct S<R: Register> {
     pub source1: usize,
     pub source2: usize,
@@ -98,6 +107,7 @@ impl<R: Register> Variant for S<R> {
 
 /// A variation of the S type where the immediate is a 13-bit branch offset.
 /// The branch offset's least significant bit is not set as it must always be aligned, thereby allowing for larger offsets.
+#[derive(Debug, Eq, PartialEq)]
 pub struct B<R: Register> {
     pub source1: usize,
     pub source2: usize,
@@ -118,6 +128,7 @@ impl<R: Register> Variant for B<R> {
 }
 
 /// The U instruction variant, encoding a destination and a 32-bit immediate value with the lower 12 bits zeroed.
+#[derive(Debug, Eq, PartialEq)]
 pub struct U<R: Register> {
     pub destination: usize,
     pub immediate: R
@@ -133,6 +144,7 @@ impl<R: Register> Variant for U<R> {
 
 /// A variation of the U instruction type where the immediate encodes a 21-bit jump offset.
 /// The least significant bit of the offset is zeroed as it must be aligned, thereby allowing a greater offset range.
+#[derive(Debug, Eq, PartialEq)]
 pub struct J<R: Register> {
     pub destination: usize,
     pub immediate: R

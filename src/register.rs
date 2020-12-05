@@ -61,7 +61,7 @@ pub trait Integer: Default {
 macro_rules! impl_integer {
     ($($name:ident(* = $shift:expr, $larger_type:ident)),*) => {
         $(
-            /// A trait needs to be implemented on something, so currently just usign the unsigned type
+            /// A trait needs to be implemented on something, so currently just using the unsigned type
             impl Integer for $name {
                 #[inline(always)]
                 fn add(self, other: Self) -> Self { $name::wrapping_add(self, other) }
@@ -180,34 +180,42 @@ pub trait Register: Xlen + Sized + Default + Copy {
     }
 
     #[cfg(feature = "ext-m")]
+    /// Multiplication returning the low bits
     fn mul(self, other: Self) -> Self {
         Self::from_signed(Self::Signed::muls(self.signed(), other.signed()).0)
     }
     #[cfg(feature = "ext-m")]
+    /// Signed multiplication returning the high bits
     fn mulh(self, other: Self) -> Self {
         Self::from_signed(Self::Signed::muls(self.signed(), other.signed()).1)
     }
     #[cfg(feature = "ext-m")]
+    /// Unsigned multiplication returning the high bits
     fn mulhu(self, other: Self) -> Self {
         Self::from_unsigned(Self::Signed::mulu(self.unsigned(), other.unsigned()).1)
     }
     #[cfg(feature = "ext-m")]
+    /// Signed-Unsigned multiplication returning the high bits
     fn mulhsu(self, other: Self) -> Self {
         Self::from_signed(Self::Signed::mulsu(self.signed(), other.unsigned()).1)
     }
     #[cfg(feature = "ext-m")]
+    /// Signed division rounding toward zero
     fn div(self, other: Self) -> Self {
         Self::from_signed(self.signed().div(other.signed()))
     }
     #[cfg(feature = "ext-m")]
+    /// Unsigned division rounding toward zero
     fn divu(self, other: Self) -> Self {
         Self::from_unsigned(self.unsigned().div(other.unsigned()))
     }
     #[cfg(feature = "ext-m")]
+    /// Remainder of the equivalent signed division with the sign matching the dividend
     fn rem(self, other: Self) -> Self {
         Self::from_signed(self.signed().rem(other.signed()))
     }
     #[cfg(feature = "ext-m")]
+    /// Remainder of the equivalent unsigned division 
     fn remu(self, other: Self) -> Self {
         Self::from_unsigned(self.unsigned().rem(other.unsigned()))
     }
